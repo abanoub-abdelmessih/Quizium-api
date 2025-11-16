@@ -18,7 +18,7 @@ export const createSubject = async (req, res) => {
     }
 
     let subjectImage = null;
-    let pdfUrl = null;
+    let pdfUrls = [];
 
     // Handle image upload if present
     if (req.files && req.files.subjectImage) {
@@ -34,17 +34,18 @@ export const createSubject = async (req, res) => {
       }
     }
 
-    // Handle PDF upload if present
+    // Handle multiple PDF uploads if present
     if (req.files && req.files.pdf) {
       try {
-        const pdfResult = await uploadToCloudinary(
-          req.files.pdf[0],
-          'quizium/pdfs',
-          'auto'
+        // Upload all PDFs to Cloudinary
+        const pdfUploadPromises = req.files.pdf.map(pdfFile => 
+          uploadToCloudinary(pdfFile, 'quizium/pdfs', 'auto')
         );
-        pdfUrl = pdfResult.secure_url;
+        
+        const pdfResults = await Promise.all(pdfUploadPromises);
+        pdfUrls = pdfResults.map(result => result.secure_url);
       } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload PDF: ' + error.message });
+        return res.status(500).json({ message: 'Failed to upload PDF(s): ' + error.message });
       }
     }
 
@@ -52,7 +53,7 @@ export const createSubject = async (req, res) => {
       name,
       description,
       subjectImage,
-      pdfUrl,
+      pdfUrl: pdfUrls,
       createdBy: req.user._id
     });
 
@@ -142,30 +143,32 @@ export const updateSubject = async (req, res) => {
       }
     }
 
-    // Handle PDF update
+    // Handle PDF update - replace all existing PDFs with new ones
     if (req.files && req.files.pdf) {
-      // Delete old PDF from Cloudinary if exists
-      if (subject.pdfUrl) {
+      // Delete all old PDFs from Cloudinary if they exist
+      if (subject.pdfUrl && Array.isArray(subject.pdfUrl) && subject.pdfUrl.length > 0) {
         try {
-          const publicId = extractPublicId(subject.pdfUrl);
-          if (publicId) {
-            await deleteFromCloudinary(publicId, 'auto');
-          }
+          const deletePromises = subject.pdfUrl.map(url => {
+            const publicId = extractPublicId(url);
+            return publicId ? deleteFromCloudinary(publicId, 'auto') : Promise.resolve();
+          });
+          await Promise.all(deletePromises);
         } catch (error) {
-          console.error('Error deleting old PDF from Cloudinary:', error);
+          console.error('Error deleting old PDFs from Cloudinary:', error);
+          // Continue even if deletion fails
         }
       }
 
-      // Upload new PDF
+      // Upload new PDFs
       try {
-        const pdfResult = await uploadToCloudinary(
-          req.files.pdf[0],
-          'quizium/pdfs',
-          'auto'
+        const pdfUploadPromises = req.files.pdf.map(pdfFile => 
+          uploadToCloudinary(pdfFile, 'quizium/pdfs', 'auto')
         );
-        subject.pdfUrl = pdfResult.secure_url;
+        
+        const pdfResults = await Promise.all(pdfUploadPromises);
+        subject.pdfUrl = pdfResults.map(result => result.secure_url);
       } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload PDF: ' + error.message });
+        return res.status(500).json({ message: 'Failed to upload PDF(s): ' + error.message });
       }
     }
 
@@ -203,15 +206,16 @@ export const deleteSubject = async (req, res) => {
       }
     }
 
-    // Delete PDF from Cloudinary if exists
-    if (subject.pdfUrl) {
+    // Delete all PDFs from Cloudinary if they exist
+    if (subject.pdfUrl && Array.isArray(subject.pdfUrl) && subject.pdfUrl.length > 0) {
       try {
-        const publicId = extractPublicId(subject.pdfUrl);
-        if (publicId) {
-          await deleteFromCloudinary(publicId, 'auto');
-        }
+        const deletePromises = subject.pdfUrl.map(url => {
+          const publicId = extractPublicId(url);
+          return publicId ? deleteFromCloudinary(publicId, 'auto') : Promise.resolve();
+        });
+        await Promise.all(deletePromises);
       } catch (error) {
-        console.error('Error deleting PDF from Cloudinary:', error);
+        console.error('Error deleting PDFs from Cloudinary:', error);
       }
     }
 

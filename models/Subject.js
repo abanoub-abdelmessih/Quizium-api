@@ -15,8 +15,8 @@ const subjectSchema = new mongoose.Schema({
     default: null
   },
   pdfUrl: {
-    type: String,
-    default: null
+    type: [String],
+    default: []
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
