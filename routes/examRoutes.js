@@ -5,12 +5,14 @@ import {
   getExams,
   getExam,
   updateExam,
-  deleteExam
+  deleteExam,
+  getAllExams
 } from '../controllers/examController.js';
 
 const router = express.Router();
 
 // Public routes
+router.get('/all', getAllExams);
 router.get('/', getExams);
 router.get('/:id', getExam);
 

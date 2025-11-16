@@ -3,7 +3,7 @@ import Score from '../models/Score.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import { getFileUrl } from '../utils/fileStorage.js';
+import { uploadToCloudinary, deleteFromCloudinary, extractPublicId } from '../utils/cloudinary.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,14 +16,34 @@ export const getProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Get profile image URL
-    const profileImageUrl = getFileUrl(user.profileImage);
-
     res.json({
       user: {
         ...user.toObject(),
-        profileImage: profileImageUrl
+        profileImage: user.profileImage // Already a Cloudinary URL
       }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get public user profile by username
+export const getPublicProfile = async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    const user = await User.findOne({ username: username.toLowerCase() })
+      .select('username name profileImage createdAt');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({
+      username: user.username,
+      name: user.name,
+      profileImage: user.profileImage,
+      createdAt: user.createdAt
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -56,8 +76,9 @@ export const updateProfile = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        username: user.username,
         email: user.email,
-        profileImage: getFileUrl(user.profileImage)
+        profileImage: user.profileImage
       }
     });
   } catch (error) {
@@ -77,20 +98,33 @@ export const uploadProfileImage = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Delete old profile image if exists
+    // Delete old profile image from Cloudinary if exists
     if (user.profileImage) {
-      const oldImagePath = path.join(__dirname, '..', user.profileImage);
-      if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath);
+      try {
+        const publicId = extractPublicId(user.profileImage);
+        if (publicId) {
+          await deleteFromCloudinary(publicId, 'auto');
+        }
+      } catch (error) {
+        console.error('Error deleting old image from Cloudinary:', error);
+        // Continue even if deletion fails
       }
     }
 
-    user.profileImage = req.file.path;
+    // Upload to Cloudinary
+    const uploadResult = await uploadToCloudinary(
+      req.file,
+      'quizium/profile',
+      'auto'
+    );
+
+    // Save Cloudinary URL to database
+    user.profileImage = uploadResult.secure_url;
     await user.save();
 
     res.json({
       message: 'Profile image uploaded successfully',
-      profileImage: getFileUrl(req.file.path)
+      profileImage: user.profileImage
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -137,11 +171,16 @@ export const deleteAccount = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Delete profile image if exists
+    // Delete profile image from Cloudinary if exists
     if (user.profileImage) {
-      const imagePath = path.join(__dirname, '..', user.profileImage);
-      if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
+      try {
+        const publicId = extractPublicId(user.profileImage);
+        if (publicId) {
+          await deleteFromCloudinary(publicId, 'auto');
+        }
+      } catch (error) {
+        console.error('Error deleting image from Cloudinary:', error);
+        // Continue even if deletion fails
       }
     }
 

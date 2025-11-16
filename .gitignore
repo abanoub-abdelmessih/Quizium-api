@@ -33,3 +33,5 @@ files/
 # Project-specific files you don't want to track
 db.txt
 api.txt
+Cloudinary.txt
+.env.example

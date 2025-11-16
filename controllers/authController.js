@@ -4,6 +4,11 @@ import { generateOTP, sendOTPEmail } from '../utils/email.js';
 
 const ADMIN_EMAILS = ['abanoubabdelmessih110@gmail.com', 'abdelmottale3@gmail.com'];
 const ADMIN_PASSWORD = 'quiziumAdmin1103';
+// Admin names mapping
+const ADMIN_NAMES = {
+  'abanoubabdelmessih110@gmail.com': 'Abanoub',
+  'abdelmottale3@gmail.com': 'Ahmed'
+};
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -13,22 +18,38 @@ const generateToken = (userId) => {
 // Register user
 export const register = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, username, email, password } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
+    if (!name || !username || !email || !password) {
+      return res.status(400).json({ message: 'Please provide all required fields: name, username, email, password' });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ 
+      $or: [
+        { email: email.toLowerCase() },
+        { username: username.toLowerCase() }
+      ]
+    });
+    
     if (existingUser) {
-      return res.status(400).json({ message: 'User already exists' });
+      if (existingUser.email === email.toLowerCase()) {
+        return res.status(400).json({ message: 'User with this email already exists' });
+      }
+      if (existingUser.username === username.toLowerCase()) {
+        return res.status(400).json({ message: 'Username already taken' });
+      }
     }
 
-    const user = await User.create({ name, email, password });
+    const user = await User.create({ 
+      name, 
+      username: username.toLowerCase(),
+      email: email.toLowerCase(), 
+      password 
+    });
     const token = generateToken(user._id);
 
     res.status(201).json({
@@ -37,11 +58,19 @@ export const register = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        username: user.username,
         email: user.email,
         isAdmin: user.isAdmin
       }
     });
   } catch (error) {
+    if (error.code === 11000) {
+      // Duplicate key error
+      const field = Object.keys(error.keyPattern)[0];
+      return res.status(400).json({ 
+        message: `${field === 'username' ? 'Username' : 'Email'} already exists` 
+      });
+    }
     res.status(500).json({ message: error.message });
   }
 };
@@ -61,14 +90,23 @@ export const login = async (req, res) => {
       
       if (!admin) {
         // Create admin account if doesn't exist
+        const adminName = ADMIN_NAMES[email.toLowerCase()] || 'Admin';
         admin = await User.create({
-          name: 'Admin',
+          name: adminName,
           email: email.toLowerCase(),
           password: ADMIN_PASSWORD,
-          isAdmin: true
+          isAdmin: true,
+          username: email.toLowerCase().split('@')[0] // Generate username from email
         });
-      } else if (!admin.isAdmin) {
-        admin.isAdmin = true;
+      } else {
+        // Update admin name if it's different from what's in DB
+        const adminName = ADMIN_NAMES[email.toLowerCase()];
+        if (adminName && admin.name !== adminName) {
+          admin.name = adminName;
+        }
+        if (!admin.isAdmin) {
+          admin.isAdmin = true;
+        }
         await admin.save();
       }
 
@@ -79,6 +117,7 @@ export const login = async (req, res) => {
         user: {
           id: admin._id,
           name: admin.name,
+          username: admin.username,
           email: admin.email,
           isAdmin: admin.isAdmin
         }
@@ -103,6 +142,7 @@ export const login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        username: user.username,
         email: user.email,
         isAdmin: user.isAdmin
       }
@@ -144,17 +184,13 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
-// Reset password with OTP
+// Reset password with OTP - only verifies OTP
 export const resetPassword = async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, otp } = req.body;
 
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Please provide email and OTP' });
     }
 
     const user = await User.findOne({ email: email.toLowerCase() });
@@ -174,11 +210,46 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
     }
 
+    // OTP is valid - return success (don't change password here)
+    res.json({ message: 'OTP verified successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Set new password after OTP verification
+export const setNewPassword = async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    if (!email || !newPassword) {
+      return res.status(400).json({ message: 'Please provide email and new password' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!user.otp || !user.otp.code) {
+      return res.status(400).json({ message: 'OTP not verified. Please verify OTP first' });
+    }
+
+    // Check if OTP is still valid
+    if (new Date() > user.otp.expiresAt) {
+      return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
+    }
+
+    // Update password and clear OTP
     user.password = newPassword;
     user.otp = undefined;
     await user.save();
 
-    res.json({ message: 'Password reset successful' });
+    res.json({ message: 'Password updated successfully' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

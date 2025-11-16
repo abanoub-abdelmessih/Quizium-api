@@ -17,20 +17,34 @@ const seedData = async () => {
 
     // Create admin accounts
     console.log('Creating admin accounts...');
+    const adminNames = {
+      'abanoubabdelmessih110@gmail.com': 'Abanoub',
+      'abdelmottale3@gmail.com': 'Ahmed'
+    };
+    
     for (const email of ADMIN_EMAILS) {
       let admin = await User.findOne({ email: email.toLowerCase() });
+      const adminName = adminNames[email.toLowerCase()] || 'Admin';
       if (!admin) {
         admin = await User.create({
-          name: 'Admin',
+          name: adminName,
+          username: email.toLowerCase().split('@')[0],
           email: email.toLowerCase(),
           password: ADMIN_PASSWORD,
           isAdmin: true
         });
-        console.log(`Admin created: ${admin.email}`);
+        console.log(`Admin created: ${admin.email} (${admin.name})`);
       } else {
+        // Update admin name and ensure username exists
+        if (admin.name !== adminName) {
+          admin.name = adminName;
+        }
+        if (!admin.username) {
+          admin.username = email.toLowerCase().split('@')[0];
+        }
         admin.isAdmin = true;
         await admin.save();
-        console.log(`Admin updated: ${admin.email}`);
+        console.log(`Admin updated: ${admin.email} (${admin.name})`);
       }
     }
 

@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticate, isAdmin } from '../middleware/auth.js';
-import { uploadPDF } from '../middleware/upload.js';
+import { uploadSubjectFiles } from '../middleware/upload.js';
 import {
   createSubject,
   getSubjects,
@@ -19,8 +19,8 @@ router.get('/:id', getSubject);
 router.use(authenticate);
 router.use(isAdmin);
 
-router.post('/', uploadPDF, createSubject);
-router.put('/:id', uploadPDF, updateSubject);
+router.post('/', uploadSubjectFiles, createSubject);
+router.put('/:id', uploadSubjectFiles, updateSubject);
 router.delete('/:id', deleteSubject);
 
 export default router;

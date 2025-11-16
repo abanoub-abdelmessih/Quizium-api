@@ -74,3 +74,33 @@ export const uploadPDF = multer({
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 }).single('pdf');
 
+// For subject creation/update - handles both image and PDF
+export const uploadSubjectFiles = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === 'subjectImage') {
+      const allowedTypes = /jpeg|jpg|png|gif/;
+      const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = allowedTypes.test(file.mimetype);
+      
+      if (mimetype && extname) {
+        return cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed for subject images'));
+      }
+    } else if (file.fieldname === 'pdf') {
+      if (file.mimetype === 'application/pdf') {
+        return cb(null, true);
+      } else {
+        cb(new Error('Only PDF files are allowed'));
+      }
+    } else {
+      cb(null, true);
+    }
+  },
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+}).fields([
+  { name: 'subjectImage', maxCount: 1 },
+  { name: 'pdf', maxCount: 1 }
+]);
+

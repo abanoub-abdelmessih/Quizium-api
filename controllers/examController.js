@@ -51,6 +51,23 @@ export const getExams = async (req, res) => {
   }
 };
 
+// Get all exams across all subjects
+export const getAllExams = async (req, res) => {
+  try {
+    const exams = await Exam.find()
+      .populate('subject', 'name')
+      .populate('createdBy', 'name email username')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      totalCount: exams.length,
+      exams
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Get single exam
 export const getExam = async (req, res) => {
   try {

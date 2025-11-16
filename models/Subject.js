@@ -10,6 +10,10 @@ const subjectSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  subjectImage: {
+    type: String,
+    default: null
+  },
   pdfUrl: {
     type: String,
     default: null

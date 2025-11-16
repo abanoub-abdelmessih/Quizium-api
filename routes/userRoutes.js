@@ -6,12 +6,16 @@ import {
   updateProfile,
   uploadProfileImage,
   changePassword,
-  deleteAccount
+  deleteAccount,
+  getPublicProfile
 } from '../controllers/userController.js';
 
 const router = express.Router();
 
-// All routes require authentication
+// Public route
+router.get('/public/:username', getPublicProfile);
+
+// All other routes require authentication
 router.use(authenticate);
 
 router.get('/profile', getProfile);
