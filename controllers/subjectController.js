@@ -3,6 +3,7 @@ import Exam from '../models/Exam.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { getFileUrl } from '../utils/fileStorage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +30,7 @@ export const createSubject = async (req, res) => {
       message: 'Subject created successfully',
       subject: {
         ...subject.toObject(),
-        pdfUrl: pdfUrl ? `/uploads/pdfs/${path.basename(pdfUrl)}` : null
+        pdfUrl: getFileUrl(pdfUrl)
       }
     });
   } catch (error) {
@@ -46,7 +47,7 @@ export const getSubjects = async (req, res) => {
 
     const subjectsWithUrls = subjects.map(subject => ({
       ...subject.toObject(),
-      pdfUrl: subject.pdfUrl ? `/uploads/pdfs/${path.basename(subject.pdfUrl)}` : null
+      pdfUrl: getFileUrl(subject.pdfUrl)
     }));
 
     res.json({ subjects: subjectsWithUrls });
@@ -68,7 +69,7 @@ export const getSubject = async (req, res) => {
     res.json({
       subject: {
         ...subject.toObject(),
-        pdfUrl: subject.pdfUrl ? `/uploads/pdfs/${path.basename(subject.pdfUrl)}` : null
+        pdfUrl: getFileUrl(subject.pdfUrl)
       }
     });
   } catch (error) {
@@ -107,7 +108,7 @@ export const updateSubject = async (req, res) => {
       message: 'Subject updated successfully',
       subject: {
         ...subject.toObject(),
-        pdfUrl: subject.pdfUrl ? `/uploads/pdfs/${path.basename(subject.pdfUrl)}` : null
+        pdfUrl: getFileUrl(subject.pdfUrl)
       }
     });
   } catch (error) {

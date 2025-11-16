@@ -3,6 +3,7 @@ import Score from '../models/Score.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { getFileUrl } from '../utils/fileStorage.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,10 +17,7 @@ export const getProfile = async (req, res) => {
     }
 
     // Get profile image URL
-    let profileImageUrl = null;
-    if (user.profileImage) {
-      profileImageUrl = `/uploads/profiles/${path.basename(user.profileImage)}`;
-    }
+    const profileImageUrl = getFileUrl(user.profileImage);
 
     res.json({
       user: {
@@ -59,7 +57,7 @@ export const updateProfile = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        profileImage: user.profileImage ? `/uploads/profiles/${path.basename(user.profileImage)}` : null
+        profileImage: getFileUrl(user.profileImage)
       }
     });
   } catch (error) {
@@ -92,7 +90,7 @@ export const uploadProfileImage = async (req, res) => {
 
     res.json({
       message: 'Profile image uploaded successfully',
-      profileImage: `/uploads/profiles/${req.file.filename}`
+      profileImage: getFileUrl(req.file.path)
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

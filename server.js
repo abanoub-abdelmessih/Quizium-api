@@ -20,9 +20,6 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Connect to database
-connectDB();
-
 const app = express();
 
 // Middleware
@@ -30,8 +27,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve uploaded files (only works in non-serverless environments)
+// For serverless, files should be stored in cloud storage (S3, Cloudinary, etc.)
+if (process.env.VERCEL !== '1') {
+  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+}
+
+// Connect to database before handling requests
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error('Database connection error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        message: 'Database connection failed',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -61,11 +77,18 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Only start server if not in serverless environment
+if (process.env.VERCEL !== '1') {
+  const PORT = process.env.PORT || 5000;
+  connectDB().then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  }).catch((error) => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  });
+}
 
 // Export for Vercel serverless
 export default app;

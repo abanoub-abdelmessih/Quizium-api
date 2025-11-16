@@ -2,32 +2,36 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Use /tmp for serverless (Vercel), or local uploads for regular server
+const isServerless = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
+const baseDir = isServerless ? path.join(os.tmpdir(), 'quizium-uploads') : path.join(__dirname, '../uploads');
+
 // Ensure uploads directory exists
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(baseDir)) {
+  fs.mkdirSync(baseDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === 'profileImage') {
-      const profileDir = path.join(uploadsDir, 'profiles');
+      const profileDir = path.join(baseDir, 'profiles');
       if (!fs.existsSync(profileDir)) {
         fs.mkdirSync(profileDir, { recursive: true });
       }
       cb(null, profileDir);
     } else if (file.fieldname === 'pdf') {
-      const pdfDir = path.join(uploadsDir, 'pdfs');
+      const pdfDir = path.join(baseDir, 'pdfs');
       if (!fs.existsSync(pdfDir)) {
         fs.mkdirSync(pdfDir, { recursive: true });
       }
       cb(null, pdfDir);
     } else {
-      cb(null, uploadsDir);
+      cb(null, baseDir);
     }
   },
   filename: (req, file, cb) => {
