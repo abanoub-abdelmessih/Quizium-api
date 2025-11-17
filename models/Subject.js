@@ -1,22 +1,19 @@
 import mongoose from 'mongoose';
 
 const subjectSchema = new mongoose.Schema({
-  name: {
+  title: {
     type: String,
     required: true,
     trim: true
   },
   description: {
     type: String,
+    required: true,
     trim: true
   },
-  subjectImage: {
+  image: {
     type: String,
     default: null
-  },
-  pdfUrl: {
-    type: [String],
-    default: []
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -24,7 +21,16 @@ const subjectSchema = new mongoose.Schema({
     required: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+subjectSchema.virtual('topics', {
+  ref: 'Topic',
+  localField: '_id',
+  foreignField: 'subject',
+  justOne: false
 });
 
 export default mongoose.model('Subject', subjectSchema);

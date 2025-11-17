@@ -10,7 +10,7 @@ export const getLeaderboard = async (req, res) => {
     const topScores = await Score.find()
       .populate('user', 'name email profileImage')
       .populate('exam', 'title subject')
-      .populate('exam.subject', 'name')
+      .populate('exam.subject', 'title')
       .sort({ score: -1, completedAt: -1 })
       .limit(limit);
 

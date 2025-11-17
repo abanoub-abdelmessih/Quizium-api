@@ -16,7 +16,7 @@ export const getFileUrl = (filePath) => {
   
   // In regular server, serve from uploads directory
   const filename = path.basename(filePath);
-  const dir = filePath.includes('profiles') ? 'profiles' : 'pdfs';
+  const dir = filePath.includes('profiles') ? 'profiles' : 'images';
   return `/uploads/${dir}/${filename}`;
 };
 

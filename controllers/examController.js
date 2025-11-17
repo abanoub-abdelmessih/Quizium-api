@@ -27,7 +27,7 @@ export const createExam = async (req, res) => {
 
     res.status(201).json({
       message: 'Exam created successfully',
-      exam: await Exam.findById(exam._id).populate('subject', 'name')
+      exam: await Exam.findById(exam._id).populate('subject', 'title')
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -41,7 +41,7 @@ export const getExams = async (req, res) => {
     const query = subject ? { subject } : {};
 
     const exams = await Exam.find(query)
-      .populate('subject', 'name')
+      .populate('subject', 'title')
       .populate('createdBy', 'name email')
       .sort({ createdAt: -1 });
 
@@ -55,7 +55,7 @@ export const getExams = async (req, res) => {
 export const getAllExams = async (req, res) => {
   try {
     const exams = await Exam.find()
-      .populate('subject', 'name')
+      .populate('subject', 'title')
       .populate('createdBy', 'name email username')
       .sort({ createdAt: -1 });
 
@@ -72,7 +72,7 @@ export const getAllExams = async (req, res) => {
 export const getExam = async (req, res) => {
   try {
     const exam = await Exam.findById(req.params.id)
-      .populate('subject', 'name')
+      .populate('subject', 'title')
       .populate('createdBy', 'name email');
 
     if (!exam) {
@@ -104,7 +104,7 @@ export const updateExam = async (req, res) => {
 
     res.json({
       message: 'Exam updated successfully',
-      exam: await Exam.findById(exam._id).populate('subject', 'name')
+      exam: await Exam.findById(exam._id).populate('subject', 'title')
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
