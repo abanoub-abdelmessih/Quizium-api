@@ -82,11 +82,9 @@ export const createSubject = async (req, res) => {
         );
         imageUrl = uploadResult.secure_url;
       } catch (error) {
-        return res
-          .status(500)
-          .json({
-            message: "Failed to upload subject image: " + error.message,
-          });
+        return res.status(500).json({
+          message: "Failed to upload subject image: " + error.message,
+        });
       }
     }
 
@@ -193,11 +191,9 @@ export const updateSubject = async (req, res) => {
         );
         subject.image = uploadResult.secure_url;
       } catch (error) {
-        return res
-          .status(500)
-          .json({
-            message: "Failed to upload subject image: " + error.message,
-          });
+        return res.status(500).json({
+          message: "Failed to upload subject image: " + error.message,
+        });
       }
     }
 
@@ -236,6 +232,101 @@ export const deleteSubject = async (req, res) => {
 
     res.json({ message: "Subject deleted successfully" });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Delete all subjects (admin only) - Enhanced version with detailed cleanup
+export const deleteAllSubjects = async (req, res) => {
+  try {
+    // Additional safety checks
+    const { confirmation, adminPassword } = req.body;
+
+    if (!confirmation || confirmation !== "DELETE_ALL_SUBJECTS") {
+      return res.status(400).json({
+        message:
+          'Confirmation required. Send { confirmation: "DELETE_ALL_SUBJECTS" } in request body to proceed.',
+      });
+    }
+
+    // Optional: Verify admin password for extra security
+    if (adminPassword) {
+      const User = (await import("../models/User.js")).default;
+      const adminUser = await User.findById(req.user._id);
+      const isPasswordValid = await adminUser.comparePassword(adminPassword);
+
+      if (!isPasswordValid) {
+        return res.status(401).json({
+          message: "Invalid admin password",
+        });
+      }
+    }
+
+    // Get all subjects with their topics
+    const allSubjects = await Subject.find().populate("topics");
+
+    if (allSubjects.length === 0) {
+      return res.json({
+        message: "No subjects found to delete",
+      });
+    }
+
+    let totalDeletedSubjects = 0;
+    let totalDeletedTopics = 0;
+    let totalDeletedExams = 0;
+    const deletedSubjectTitles = [];
+
+    // Delete each subject with its associated data
+    for (const subject of allSubjects) {
+      try {
+        // Delete subject image from Cloudinary if exists
+        if (subject.image) {
+          await deleteImageIfExists(subject.image);
+        }
+
+        // Delete topic images from Cloudinary
+        const topicImages =
+          subject.topics?.map((topic) => topic.image).filter(Boolean) || [];
+        await Promise.all(topicImages.map(deleteImageIfExists));
+
+        // Delete all topics for this subject
+        const topicDeleteResult = await Topic.deleteMany({
+          subject: subject._id,
+        });
+        totalDeletedTopics += topicDeleteResult.deletedCount;
+
+        // Delete all exams for this subject
+        const examDeleteResult = await Exam.deleteMany({
+          subject: subject._id,
+        });
+        totalDeletedExams += examDeleteResult.deletedCount;
+
+        // Delete the subject
+        await Subject.deleteOne({ _id: subject._id });
+        totalDeletedSubjects++;
+        deletedSubjectTitles.push(subject.title);
+      } catch (subjectError) {
+        console.error(`Error deleting subject ${subject.title}:`, subjectError);
+        // Continue with next subject even if one fails
+      }
+    }
+
+    console.warn(
+      `ADMIN ACTION: User ${req.user.username} deleted ${totalDeletedSubjects} subjects, ${totalDeletedTopics} topics, and ${totalDeletedExams} exams`
+    );
+
+    res.json({
+      message: `Successfully deleted ${totalDeletedSubjects} subjects and all associated data`,
+      summary: {
+        deletedSubjects: totalDeletedSubjects,
+        deletedTopics: totalDeletedTopics,
+        deletedExams: totalDeletedExams,
+      },
+      deletedSubjects: deletedSubjectTitles,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error in deleteAllSubjects:", error);
     res.status(500).json({ message: error.message });
   }
 };
