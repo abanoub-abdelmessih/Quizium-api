@@ -8,6 +8,7 @@ import {
   updateSubject,
   deleteSubject,
   deleteAllSubjects,
+  deleteAllTopicsInSubject,
 } from "../controllers/subjectController.js";
 import {
   createTopic,
@@ -37,5 +38,6 @@ router.delete("/admin/delete-all", deleteAllSubjects);
 router.post("/:id/topics", uploadTopicImage, createTopic);
 router.patch("/:id/topics/:topicId", uploadTopicImage, updateTopic);
 router.delete("/:id/topics/:topicId", deleteTopic);
+router.delete("/:id/topics", deleteAllTopicsInSubject);
 
 export default router;

@@ -330,3 +330,98 @@ export const deleteAllSubjects = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Delete all topics in a subject (admin only) - Enhanced version
+export const deleteAllTopicsInSubject = async (req, res) => {
+  try {
+    const { id: subjectId } = req.params;
+    const { confirmation, keepFirstTopic } = req.body;
+
+    // Check if subject exists
+    const subject = await Subject.findById(subjectId);
+    if (!subject) {
+      return res.status(404).json({ message: "Subject not found" });
+    }
+
+    // Safety confirmation
+    if (!confirmation || confirmation !== "DELETE_ALL_TOPICS") {
+      return res.status(400).json({
+        message:
+          'Confirmation required. Send { confirmation: "DELETE_ALL_TOPICS" } in request body to proceed.',
+      });
+    }
+
+    // Get all topics for this subject, sorted by creation date
+    let topics = await Topic.find({ subject: subjectId }).sort({
+      createdAt: 1,
+    });
+
+    if (topics.length === 0) {
+      return res.json({
+        message: "No topics found to delete in this subject",
+        subject: subject.title,
+      });
+    }
+
+    // Option to keep the first topic (oldest) if needed
+    let topicsToDelete = topics;
+    let keptTopic = null;
+
+    if (keepFirstTopic && topics.length > 1) {
+      keptTopic = topics[0];
+      topicsToDelete = topics.slice(1);
+    }
+
+    let deletedCount = 0;
+    let deletedImages = 0;
+    const deletedTopicTitles = [];
+
+    // Delete topic images from Cloudinary and the topics themselves
+    for (const topic of topicsToDelete) {
+      try {
+        // Delete topic image from Cloudinary if exists
+        if (topic.image) {
+          await deleteImageIfExists(topic.image);
+          deletedImages++;
+        }
+
+        // Delete the topic
+        await Topic.deleteOne({ _id: topic._id });
+        deletedCount++;
+        deletedTopicTitles.push(topic.title);
+      } catch (topicError) {
+        console.error(`Error deleting topic ${topic.title}:`, topicError);
+        // Continue with next topic even if one fails
+      }
+    }
+
+    const response = {
+      message: `Successfully deleted ${deletedCount} topics from subject: ${subject.title}`,
+      summary: {
+        subject: subject.title,
+        totalTopicsBefore: topics.length,
+        deletedTopics: deletedCount,
+        remainingTopics: topics.length - deletedCount,
+        deletedImages: deletedImages,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    if (keptTopic) {
+      response.keptTopic = {
+        id: keptTopic._id,
+        title: keptTopic.title,
+        reason: "Oldest topic kept as requested",
+      };
+    }
+
+    if (deletedTopicTitles.length > 0) {
+      response.deletedTopics = deletedTopicTitles;
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error in deleteAllTopicsInSubject:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
