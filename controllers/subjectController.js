@@ -1,69 +1,119 @@
-import Subject from '../models/Subject.js';
-import Exam from '../models/Exam.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
-import { uploadToCloudinary, deleteFromCloudinary, extractPublicId } from '../utils/cloudinary.js';
+import Subject from "../models/Subject.js";
+import Topic from "../models/Topic.js";
+import Exam from "../models/Exam.js";
+import {
+  uploadToCloudinary,
+  deleteFromCloudinary,
+  extractPublicId,
+} from "../utils/cloudinary.js";
+import {
+  parseTopicsInput,
+  sanitizeDescription,
+  normalizeTags,
+  formatSubjectResponse,
+} from "../utils/content.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const populateSubjectWithTopics = (subjectId) => {
+  return Subject.findById(subjectId).populate({
+    path: "topics",
+    options: { sort: { createdAt: 1 } },
+  });
+};
+
+const sanitizeTopicPayload = (topic) => {
+  if (!topic || typeof topic !== "object") {
+    return null;
+  }
+
+  const title = topic.title?.trim();
+  const description = sanitizeDescription(topic.description || "");
+
+  if (!title || !description) {
+    return null;
+  }
+
+  return {
+    title,
+    description,
+    image: topic.image?.trim() || null,
+    tags: normalizeTags(topic.tags),
+  };
+};
+
+const deleteImageIfExists = async (imageUrl) => {
+  if (!imageUrl) return;
+  const publicId = extractPublicId(imageUrl);
+  if (publicId) {
+    await deleteFromCloudinary(publicId, "image");
+  }
+};
 
 // Create subject
 export const createSubject = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { title, description, topics } = req.body;
 
-    if (!name) {
-      return res.status(400).json({ message: 'Subject name is required' });
+    const trimmedTitle = title?.trim();
+    const cleanedDescription = sanitizeDescription(description || "");
+
+    if (!trimmedTitle || !cleanedDescription) {
+      return res
+        .status(400)
+        .json({ message: "Title and description are required" });
     }
 
-    let subjectImage = null;
-    let pdfUrls = [];
+    const parsedTopics = parseTopicsInput(topics)
+      .map(sanitizeTopicPayload)
+      .filter(Boolean);
 
-    // Handle image upload if present
-    if (req.files && req.files.subjectImage) {
-      try {
-        const imageResult = await uploadToCloudinary(
-          req.files.subjectImage[0],
-          'quizium/subjects',
-          'auto'
-        );
-        subjectImage = imageResult.secure_url;
-      } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload subject image: ' + error.message });
-      }
+    if (parsedTopics.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "At least one valid topic is required" });
     }
 
-    // Handle multiple PDF uploads if present
-    if (req.files && req.files.pdf) {
+    let imageUrl = null;
+    if (req.file) {
       try {
-        // Upload all PDFs to Cloudinary
-        const pdfUploadPromises = req.files.pdf.map(pdfFile => 
-          uploadToCloudinary(pdfFile, 'quizium/pdfs', 'auto')
+        const uploadResult = await uploadToCloudinary(
+          req.file,
+          "cloudnaiy/subjects",
+          "auto"
         );
-        
-        const pdfResults = await Promise.all(pdfUploadPromises);
-        pdfUrls = pdfResults.map(result => result.secure_url);
+        imageUrl = uploadResult.secure_url;
       } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload PDF(s): ' + error.message });
+        return res
+          .status(500)
+          .json({
+            message: "Failed to upload subject image: " + error.message,
+          });
       }
     }
 
     const subject = await Subject.create({
-      name,
-      description,
-      subjectImage,
-      pdfUrl: pdfUrls,
-      createdBy: req.user._id
+      title: trimmedTitle,
+      description: cleanedDescription,
+      image: imageUrl,
+      createdBy: req.user._id,
     });
 
+    const topicsToInsert = parsedTopics.map((topic) => ({
+      ...topic,
+      subject: subject._id,
+    }));
+
+    try {
+      await Topic.insertMany(topicsToInsert);
+    } catch (topicError) {
+      await Subject.deleteOne({ _id: subject._id });
+      throw topicError;
+    }
+
+    const subjectWithTopics = await populateSubjectWithTopics(subject._id);
+
     res.status(201).json({
-      message: 'Subject created successfully',
-      subject: {
-        ...subject.toObject(),
-        subjectImage: subject.subjectImage,
-        pdfUrl: subject.pdfUrl
-      }
+      message: "Subject created successfully",
+      subject: formatSubjectResponse(subjectWithTopics),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -74,10 +124,15 @@ export const createSubject = async (req, res) => {
 export const getSubjects = async (req, res) => {
   try {
     const subjects = await Subject.find()
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .populate({
+        path: "topics",
+        options: { sort: { createdAt: 1 } },
+      });
 
-    res.json({ subjects });
+    res.json({
+      subjects: subjects.map(formatSubjectResponse),
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -86,17 +141,14 @@ export const getSubjects = async (req, res) => {
 // Get single subject
 export const getSubject = async (req, res) => {
   try {
-    const subject = await Subject.findById(req.params.id)
-      .populate('createdBy', 'name email');
+    const subject = await populateSubjectWithTopics(req.params.id);
 
     if (!subject) {
-      return res.status(404).json({ message: 'Subject not found' });
+      return res.status(404).json({ message: "Subject not found" });
     }
 
     res.json({
-      subject: {
-        ...subject.toObject()
-      }
+      subject: formatSubjectResponse(subject),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -106,79 +158,55 @@ export const getSubject = async (req, res) => {
 // Update subject
 export const updateSubject = async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { title, description } = req.body;
     const subject = await Subject.findById(req.params.id);
 
     if (!subject) {
-      return res.status(404).json({ message: 'Subject not found' });
+      return res.status(404).json({ message: "Subject not found" });
     }
 
-    if (name) subject.name = name;
-    if (description !== undefined) subject.description = description;
+    if (title !== undefined) {
+      const trimmedTitle = title.trim();
+      if (!trimmedTitle) {
+        return res.status(400).json({ message: "Title cannot be empty" });
+      }
+      subject.title = trimmedTitle;
+    }
+    if (description !== undefined) {
+      const cleanedDescription = sanitizeDescription(description);
+      if (!cleanedDescription) {
+        return res.status(400).json({ message: "Description cannot be empty" });
+      }
+      subject.description = cleanedDescription;
+    }
 
-    // Handle subject image update
-    if (req.files && req.files.subjectImage) {
-      // Delete old image from Cloudinary if exists
-      if (subject.subjectImage) {
-        try {
-          const publicId = extractPublicId(subject.subjectImage);
-          if (publicId) {
-            await deleteFromCloudinary(publicId, 'auto');
-          }
-        } catch (error) {
-          console.error('Error deleting old image from Cloudinary:', error);
-        }
+    if (req.file) {
+      if (subject.image) {
+        await deleteImageIfExists(subject.image);
       }
 
-      // Upload new image
       try {
-        const imageResult = await uploadToCloudinary(
-          req.files.subjectImage[0],
-          'quizium/subjects',
-          'auto'
+        const uploadResult = await uploadToCloudinary(
+          req.file,
+          "cloudnaiy/subjects",
+          "auto"
         );
-        subject.subjectImage = imageResult.secure_url;
+        subject.image = uploadResult.secure_url;
       } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload subject image: ' + error.message });
-      }
-    }
-
-    // Handle PDF update - replace all existing PDFs with new ones
-    if (req.files && req.files.pdf) {
-      // Delete all old PDFs from Cloudinary if they exist
-      if (subject.pdfUrl && Array.isArray(subject.pdfUrl) && subject.pdfUrl.length > 0) {
-        try {
-          const deletePromises = subject.pdfUrl.map(url => {
-            const publicId = extractPublicId(url);
-            return publicId ? deleteFromCloudinary(publicId, 'auto') : Promise.resolve();
+        return res
+          .status(500)
+          .json({
+            message: "Failed to upload subject image: " + error.message,
           });
-          await Promise.all(deletePromises);
-        } catch (error) {
-          console.error('Error deleting old PDFs from Cloudinary:', error);
-          // Continue even if deletion fails
-        }
-      }
-
-      // Upload new PDFs
-      try {
-        const pdfUploadPromises = req.files.pdf.map(pdfFile => 
-          uploadToCloudinary(pdfFile, 'quizium/pdfs', 'auto')
-        );
-        
-        const pdfResults = await Promise.all(pdfUploadPromises);
-        subject.pdfUrl = pdfResults.map(result => result.secure_url);
-      } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload PDF(s): ' + error.message });
       }
     }
 
     await subject.save();
+    const updatedSubject = await populateSubjectWithTopics(subject._id);
 
     res.json({
-      message: 'Subject updated successfully',
-      subject: {
-        ...subject.toObject()
-      }
+      message: "Subject updated successfully",
+      subject: formatSubjectResponse(updatedSubject),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -188,48 +216,26 @@ export const updateSubject = async (req, res) => {
 // Delete subject
 export const deleteSubject = async (req, res) => {
   try {
-    const subject = await Subject.findById(req.params.id);
+    const subject = await Subject.findById(req.params.id).populate("topics");
 
     if (!subject) {
-      return res.status(404).json({ message: 'Subject not found' });
+      return res.status(404).json({ message: "Subject not found" });
     }
 
-    // Delete subject image from Cloudinary if exists
-    if (subject.subjectImage) {
-      try {
-        const publicId = extractPublicId(subject.subjectImage);
-        if (publicId) {
-          await deleteFromCloudinary(publicId, 'auto');
-        }
-      } catch (error) {
-        console.error('Error deleting image from Cloudinary:', error);
-      }
+    if (subject.image) {
+      await deleteImageIfExists(subject.image);
     }
 
-    // Delete all PDFs from Cloudinary if they exist
-    if (subject.pdfUrl && Array.isArray(subject.pdfUrl) && subject.pdfUrl.length > 0) {
-      try {
-        const deletePromises = subject.pdfUrl.map(url => {
-          const publicId = extractPublicId(url);
-          return publicId ? deleteFromCloudinary(publicId, 'auto') : Promise.resolve();
-        });
-        await Promise.all(deletePromises);
-      } catch (error) {
-        console.error('Error deleting PDFs from Cloudinary:', error);
-      }
-    }
+    const topicImages =
+      subject.topics?.map((topic) => topic.image).filter(Boolean) || [];
+    await Promise.all(topicImages.map(deleteImageIfExists));
 
-    // Delete all exams associated with this subject
-    const exams = await Exam.find({ subject: subject._id });
-    for (const exam of exams) {
-      await Exam.findByIdAndDelete(exam._id);
-    }
+    await Topic.deleteMany({ subject: subject._id });
+    await Exam.deleteMany({ subject: subject._id });
+    await Subject.deleteOne({ _id: subject._id });
 
-    await Subject.findByIdAndDelete(subject._id);
-
-    res.json({ message: 'Subject deleted successfully' });
+    res.json({ message: "Subject deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-

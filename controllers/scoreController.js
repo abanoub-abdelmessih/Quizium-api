@@ -85,6 +85,7 @@ export const getExamResults = async (req, res) => {
       exam: examId
     })
       .populate('exam', 'title subject')
+      .populate('exam.subject', 'title')
       .populate('answers.question', 'questionText options correctAnswer marks')
       .sort({ completedAt: -1 });
 
@@ -103,7 +104,7 @@ export const getUserScores = async (req, res) => {
   try {
     const scores = await Score.find({ user: req.user._id })
       .populate('exam', 'title subject')
-      .populate('exam.subject', 'name')
+      .populate('exam.subject', 'title')
       .sort({ completedAt: -1 });
 
     res.json({ scores });

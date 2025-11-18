@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import connectDB from '../config/database.js';
 import User from '../models/User.js';
 import Subject from '../models/Subject.js';
+import Topic from '../models/Topic.js';
 import Exam from '../models/Exam.js';
 import Question from '../models/Question.js';
 
@@ -53,16 +54,35 @@ const seedData = async () => {
 
     // Create a sample subject
     console.log('Creating sample subject...');
-    let subject = await Subject.findOne({ name: 'Mathematics' });
+    let subject = await Subject.findOne({ title: 'Mathematics' });
     if (!subject) {
       subject = await Subject.create({
-        name: 'Mathematics',
+        title: 'Mathematics',
         description: 'Basic mathematics and algebra',
         createdBy: admin._id
       });
-      console.log(`Subject created: ${subject.name}`);
+      console.log(`Subject created: ${subject.title}`);
     } else {
-      console.log(`Subject already exists: ${subject.name}`);
+      console.log(`Subject already exists: ${subject.title}`);
+    }
+
+    const existingTopics = await Topic.countDocuments({ subject: subject._id });
+    if (existingTopics === 0) {
+      await Topic.insertMany([
+        {
+          subject: subject._id,
+          title: 'Number Sense',
+          description: 'Explains natural numbers, integers, and place value using short bullet-style sentences.',
+          tags: ['numbers', 'basics']
+        },
+        {
+          subject: subject._id,
+          title: 'Algebra Basics',
+          description: 'Covers variables, simple equations, and the idea of balancing both sides step by step.',
+          tags: ['algebra']
+        }
+      ]);
+      console.log('Sample topics created for Mathematics');
     }
 
     // Create a sample exam
