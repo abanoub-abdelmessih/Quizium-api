@@ -1,6 +1,7 @@
 import Exam from "../models/Exam.js";
 import Question from "../models/Question.js";
 import Subject from "../models/Subject.js";
+import User from "../models/User.js";
 
 // Create exam
 export const createExam = async (req, res) => {
@@ -182,5 +183,107 @@ export const deleteExam = async (req, res) => {
     res.json({ message: "Exam deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Delete all exams (admin only) - Enhanced security version
+export const deleteAllExams = async (req, res) => {
+  try {
+    const { confirmation, adminPassword } = req.body;
+
+    // Safety confirmation check
+    if (!confirmation || confirmation !== "DELETE_ALL_EXAMS") {
+      return res.status(400).json({
+        message:
+          'Confirmation required. Send { confirmation: "DELETE_ALL_EXAMS", adminPassword: "your_password" } in request body to proceed.',
+      });
+    }
+
+    // Verify admin password
+    if (!adminPassword || adminPassword !== "quiziumAdmin1103") {
+      return res.status(401).json({
+        message: "Invalid admin password",
+      });
+    }
+
+    // Additional security: Verify the user is actually an admin
+    const adminUser = await User.findById(req.user._id);
+    if (!adminUser || !adminUser.isAdmin) {
+      return res.status(403).json({
+        message: "Access denied. Admin privileges required.",
+      });
+    }
+
+    // Get exam statistics before deletion
+    const totalExams = await Exam.countDocuments();
+    const totalQuestions = await Question.countDocuments();
+
+    if (totalExams === 0) {
+      return res.json({
+        message: "No exams found to delete",
+        stats: {
+          totalExams: 0,
+          totalQuestions: totalQuestions,
+        },
+      });
+    }
+
+    // Get exam details for logging
+    const examDetails = await Exam.find()
+      .populate("subject", "title")
+      .select("title difficulty subject createdAt")
+      .sort({ createdAt: -1 })
+      .limit(10); // Log only last 10 exams for brevity
+
+    // Delete all questions first
+    const questionDeleteResult = await Question.deleteMany({});
+
+    // Then delete all exams
+    const examDeleteResult = await Exam.deleteMany({});
+
+    // Log the action with details
+    console.warn(
+      `ADMIN ACTION: User ${adminUser.username} (${adminUser.email}) deleted all exams`,
+      {
+        action: "DELETE_ALL_EXAMS",
+        adminUser: {
+          id: adminUser._id,
+          username: adminUser.username,
+          email: adminUser.email,
+        },
+        deleted: {
+          exams: examDeleteResult.deletedCount,
+          questions: questionDeleteResult.deletedCount,
+        },
+        lastExamsDeleted: examDetails.map((exam) => ({
+          title: exam.title,
+          difficulty: exam.difficulty,
+          subject: exam.subject?.title || "Unknown",
+          createdAt: exam.createdAt,
+        })),
+        timestamp: new Date().toISOString(),
+      }
+    );
+
+    res.json({
+      message: `Successfully deleted all exams and questions from the system`,
+      summary: {
+        deletedExams: examDeleteResult.deletedCount,
+        deletedQuestions: questionDeleteResult.deletedCount,
+        previousStats: {
+          totalExams: totalExams,
+          totalQuestions: totalQuestions,
+        },
+      },
+      warning:
+        "This action is irreversible. All exam and question data has been permanently deleted.",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error in deleteAllExams:", error);
+    res.status(500).json({
+      message: "Failed to delete all exams",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };

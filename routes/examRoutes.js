@@ -6,6 +6,7 @@ import {
   getExam,
   updateExam,
   deleteExam,
+  deleteAllExams,
 } from "../controllers/examController.js";
 
 const router = express.Router();
@@ -21,5 +22,6 @@ router.use(isAdmin);
 router.post("/", createExam);
 router.put("/:id", updateExam);
 router.delete("/:id", deleteExam);
+router.delete("/admin/delete-all", deleteAllExams);
 
 export default router;
