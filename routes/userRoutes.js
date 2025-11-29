@@ -10,7 +10,6 @@ import {
   getPublicProfile,
   getAllUsers,
   deleteAllUsers,
-  deleteProfileImage,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -24,7 +23,6 @@ router.use(authenticate);
 router.get("/profile", getProfile);
 router.put("/profile", updateProfile);
 router.post("/profile/image", uploadMiddleware, uploadProfileImage);
-router.delete("/profile/image", deleteProfileImage);
 router.put("/change-password", changePassword);
 router.delete("/account", deleteAccount);
 
