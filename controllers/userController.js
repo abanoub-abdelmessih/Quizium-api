@@ -330,3 +330,46 @@ export const deleteAllUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Delete profile image
+export const deleteProfileImage = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if user has a profile image
+    if (!user.profileImage) {
+      return res.status(400).json({ message: "No profile image to delete" });
+    }
+
+    // Delete profile image from Cloudinary
+    try {
+      const publicId = extractPublicId(user.profileImage);
+      if (publicId) {
+        await deleteFromCloudinary(publicId, "image");
+      }
+    } catch (error) {
+      console.error("Error deleting image from Cloudinary:", error);
+      // Continue even if deletion fails to update database
+    }
+
+    // Remove profile image from database
+    user.profileImage = null;
+    await user.save();
+
+    res.json({
+      message: "Profile image deleted successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        profileImage: null,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
