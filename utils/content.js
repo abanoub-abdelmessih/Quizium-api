@@ -1,9 +1,9 @@
-const stripHTML = (text = '') => text.replace(/<[^>]*>/g, ' ');
+const stripHTML = (text = "") => text.replace(/<[^>]*>/g, " ");
 
-export const sanitizeDescription = (text = '') => {
+export const sanitizeDescription = (text = "") => {
   return stripHTML(text)
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 };
 
@@ -12,7 +12,7 @@ export const normalizeTags = (tagsInput) => {
 
   const toArray = (value) => {
     if (Array.isArray(value)) return value;
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       const trimmed = value.trim();
       if (!trimmed) return [];
       try {
@@ -21,20 +21,20 @@ export const normalizeTags = (tagsInput) => {
       } catch {
         // Not JSON, fall through to comma split
       }
-      return trimmed.split(',').map(tag => tag.trim());
+      return trimmed.split(",").map((tag) => tag.trim());
     }
     return [];
   };
 
   return toArray(tagsInput)
-    .map(tag => tag.trim())
+    .map((tag) => tag.trim())
     .filter(Boolean);
 };
 
 export const parseTopicsInput = (topicsInput) => {
   if (!topicsInput) return [];
 
-  if (typeof topicsInput === 'string') {
+  if (typeof topicsInput === "string") {
     const trimmed = topicsInput.trim();
     if (!trimmed) return [];
     try {
@@ -59,7 +59,7 @@ export const formatTopicResponse = (topicDoc) => ({
   image: topicDoc.image || null,
   tags: topicDoc.tags || [],
   createdAt: topicDoc.createdAt,
-  updatedAt: topicDoc.updatedAt
+  updatedAt: topicDoc.updatedAt,
 });
 
 export const formatSubjectResponse = (subjectDoc) => ({
@@ -67,6 +67,14 @@ export const formatSubjectResponse = (subjectDoc) => ({
   title: subjectDoc.title,
   description: subjectDoc.description,
   image: subjectDoc.image || null,
-  topics: (subjectDoc.topics || []).map(formatTopicResponse)
+  topics: (subjectDoc.topics || []).map(formatTopicResponse),
+  createdBy: subjectDoc.createdBy
+    ? {
+        _id: subjectDoc.createdBy._id.toString(),
+        name: subjectDoc.createdBy.name,
+        email: subjectDoc.createdBy.email,
+      }
+    : null,
+  createdAt: subjectDoc.createdAt,
+  updatedAt: subjectDoc.updatedAt,
 });
-

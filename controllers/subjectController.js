@@ -14,10 +14,15 @@ import {
 } from "../utils/content.js";
 
 const populateSubjectWithTopics = (subjectId) => {
-  return Subject.findById(subjectId).populate({
-    path: "topics",
-    options: { sort: { createdAt: 1 } },
-  });
+  return Subject.findById(subjectId)
+    .populate({
+      path: "topics",
+      options: { sort: { createdAt: 1 } },
+    })
+    .populate({
+      path: "createdBy",
+      select: "name email",
+    });
 };
 
 const sanitizeTopicPayload = (topic) => {
@@ -126,6 +131,10 @@ export const getSubjects = async (req, res) => {
       .populate({
         path: "topics",
         options: { sort: { createdAt: 1 } },
+      })
+      .populate({
+        path: "createdBy",
+        select: "name email",
       });
 
     res.json({
