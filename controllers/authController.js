@@ -2,16 +2,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { generateOTP, sendOTPEmail } from "../utils/email.js";
 
-const ADMIN_EMAILS = [
-  "abanoubabdelmessih110@gmail.com",
-  "abdelmottale3@gmail.com",
-];
-const ADMIN_PASSWORD = "quiziumAdmin1103";
-// Admin names mapping
-const ADMIN_NAMES = {
-  "abanoubabdelmessih110@gmail.com": "Abanoub",
-  "abdelmottale3@gmail.com": "Ahmed",
-};
+import { verifyAdminEmail, verifyAdminPassword } from "../utils/adminAuth.js";
 
 // Generate JWT token
 const generateToken = (userId, isAdmin = false) => {
@@ -80,9 +71,8 @@ export const register = async (req, res) => {
       // Duplicate key error
       const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
-        message: `${
-          field === "username" ? "Username" : "Email"
-        } already exists`,
+        message: `${field === "username" ? "Username" : "Email"
+          } already exists`,
       });
     }
     res.status(500).json({ message: error.message });
@@ -101,32 +91,26 @@ export const login = async (req, res) => {
     }
 
     // Check if admin login
-    if (
-      ADMIN_EMAILS.includes(email.toLowerCase()) &&
-      password === ADMIN_PASSWORD
-    ) {
+    if (verifyAdminEmail(email) && verifyAdminPassword(password)) {
       let admin = await User.findOne({ email: email.toLowerCase() });
 
       if (!admin) {
         // Create admin account if doesn't exist
-        const adminName = ADMIN_NAMES[email.toLowerCase()] || "Admin";
+        // Use a generic name or derive from email since we don't have the mapping anymore
+        const adminName = "Admin";
         admin = await User.create({
           name: adminName,
           email: email.toLowerCase(),
-          password: ADMIN_PASSWORD,
+          password: process.env.ADMIN_PASSWORD, // Use the env password for the DB record too
           isAdmin: true,
           username: email.toLowerCase().split("@")[0], // Generate username from email
         });
       } else {
-        // Update admin name if it's different from what's in DB
-        const adminName = ADMIN_NAMES[email.toLowerCase()];
-        if (adminName && admin.name !== adminName) {
-          admin.name = adminName;
-        }
+        // Ensure admin status is true
         if (!admin.isAdmin) {
           admin.isAdmin = true;
+          await admin.save();
         }
-        await admin.save();
       }
 
       const token = generateToken(admin._id, true);

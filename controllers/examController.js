@@ -3,6 +3,8 @@ import Question from "../models/Question.js";
 import Subject from "../models/Subject.js";
 import User from "../models/User.js";
 
+import { verifyAdminPassword } from "../utils/adminAuth.js";
+
 // Create exam
 export const createExam = async (req, res) => {
   try {
@@ -242,7 +244,7 @@ export const deleteAllExams = async (req, res) => {
     }
 
     // Verify admin password
-    if (!adminPassword || adminPassword !== "quiziumAdmin1103") {
+    if (!verifyAdminPassword(adminPassword)) {
       return res.status(401).json({
         message: "Invalid admin password",
       });

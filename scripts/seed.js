@@ -8,9 +8,6 @@ import Question from '../models/Question.js';
 
 dotenv.config();
 
-const ADMIN_EMAILS = ['abanoubabdelmessih110@gmail.com', 'abdelmottale3@gmail.com'];
-const ADMIN_PASSWORD = 'quiziumAdmin1103';
-
 const seedData = async () => {
   try {
     await connectDB();
@@ -18,39 +15,51 @@ const seedData = async () => {
 
     // Create admin accounts
     console.log('Creating admin accounts...');
-    const adminNames = {
-      'abanoubabdelmessih110@gmail.com': 'Abanoub',
-      'abdelmottale3@gmail.com': 'Ahmed'
-    };
-    
-    for (const email of ADMIN_EMAILS) {
-      let admin = await User.findOne({ email: email.toLowerCase() });
-      const adminName = adminNames[email.toLowerCase()] || 'Admin';
-      if (!admin) {
-        admin = await User.create({
-          name: adminName,
-          username: email.toLowerCase().split('@')[0],
-          email: email.toLowerCase(),
-          password: ADMIN_PASSWORD,
-          isAdmin: true
-        });
-        console.log(`Admin created: ${admin.email} (${admin.name})`);
-      } else {
-        // Update admin name and ensure username exists
-        if (admin.name !== adminName) {
-          admin.name = adminName;
+
+    const adminEmails = (process.env.SEED_ADMIN_EMAILS || '').split(',').filter(Boolean);
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (adminEmails.length === 0 || !adminPassword) {
+      console.warn('Skipping admin creation: SEED_ADMIN_EMAILS or ADMIN_PASSWORD not set in .env');
+    } else {
+      for (const email of adminEmails) {
+        let admin = await User.findOne({ email: email.toLowerCase() });
+        const adminName = 'Admin'; // Default name since we don't have mapping
+
+        if (!admin) {
+          admin = await User.create({
+            name: adminName,
+            username: email.toLowerCase().split('@')[0],
+            email: email.toLowerCase(),
+            password: adminPassword,
+            isAdmin: true
+          });
+          console.log(`Admin created: ${admin.email} (${admin.name})`);
+        } else {
+          // Update admin status
+          if (!admin.isAdmin) {
+            admin.isAdmin = true;
+            await admin.save();
+            console.log(`Admin updated: ${admin.email} (${admin.name})`);
+          } else {
+            console.log(`Admin already exists: ${admin.email}`);
+          }
         }
-        if (!admin.username) {
-          admin.username = email.toLowerCase().split('@')[0];
-        }
-        admin.isAdmin = true;
-        await admin.save();
-        console.log(`Admin updated: ${admin.email} (${admin.name})`);
       }
     }
 
-    // Get first admin for creating subjects/exams
-    const admin = await User.findOne({ email: ADMIN_EMAILS[0].toLowerCase() });
+    // Get first admin for creating subjects/exams (if any exist)
+    const firstAdminEmail = adminEmails[0];
+    let admin = null;
+
+    if (firstAdminEmail) {
+      admin = await User.findOne({ email: firstAdminEmail.toLowerCase() });
+    }
+
+    if (!admin) {
+      console.warn('No admin found to create sample content. Skipping sample data creation.');
+      process.exit(0);
+    }
 
     // Create a sample subject
     console.log('Creating sample subject...');
@@ -181,4 +190,3 @@ const seedData = async () => {
 };
 
 seedData();
-
