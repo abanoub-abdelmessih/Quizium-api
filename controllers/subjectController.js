@@ -21,7 +21,7 @@ const populateSubjectWithTopics = (subjectId) => {
     })
     .populate({
       path: "createdBy",
-      select: "name email",
+      select: "name email _id",
     });
 };
 
@@ -134,7 +134,7 @@ export const getSubjects = async (req, res) => {
       })
       .populate({
         path: "createdBy",
-        select: "name email",
+        select: "name email _id",
       });
 
     res.json({
