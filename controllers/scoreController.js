@@ -3,10 +3,11 @@ import Exam from "../models/Exam.js";
 import Question from "../models/Question.js";
 
 // Submit exam answers
+// Submit exam answers with retake validation
 export const submitExam = async (req, res) => {
   try {
     const { examId } = req.params;
-    const { answers } = req.body; // Array of { questionId, selectedAnswer }
+    const { answers } = req.body;
 
     if (!answers || !Array.isArray(answers)) {
       return res.status(400).json({ message: "Answers must be an array" });
@@ -15,6 +16,38 @@ export const submitExam = async (req, res) => {
     const exam = await Exam.findById(examId);
     if (!exam) {
       return res.status(404).json({ message: "Exam not found" });
+    }
+
+    // Check if user has already taken this exam
+    const existingScores = await Score.find({
+      user: req.user._id,
+      exam: examId,
+    }).sort({ completedAt: -1 });
+
+    const latestScore = existingScores[0];
+    const attemptCount = existingScores.length;
+
+    // Validation rules
+    if (attemptCount >= 2) {
+      return res.status(400).json({
+        message: "You have already used both attempts for this exam",
+        previousAttempts: existingScores.map((score) => ({
+          score: score.score,
+          percentage: score.percentage,
+          completedAt: score.completedAt,
+        })),
+      });
+    }
+
+    if (attemptCount === 1 && latestScore.percentage >= 50) {
+      return res.status(400).json({
+        message: "You have already passed this exam and cannot retake it",
+        previousScore: {
+          score: latestScore.score,
+          percentage: latestScore.percentage,
+          completedAt: latestScore.completedAt,
+        },
+      });
     }
 
     // Get all questions for this exam
@@ -57,24 +90,46 @@ export const submitExam = async (req, res) => {
       totalMarks: exam.totalMarks,
       percentage: parseFloat(percentage.toFixed(2)),
       answers: answerDetails,
+      attemptNumber: attemptCount + 1,
     });
 
-    res.status(201).json({
+    const response = {
       message: "Exam submitted successfully",
       result: {
         score,
         totalMarks: exam.totalMarks,
         percentage: parseFloat(percentage.toFixed(2)),
-        answers: answerDetails.map((answer, index) => ({
-          question: questions[index].questionText,
-          options: questions[index].options,
-          correctAnswer: questions[index].correctAnswer,
-          selectedAnswer: answer.selectedAnswer,
-          isCorrect: answer.isCorrect,
-          marks: answer.isCorrect ? questions[index].marks : 0,
-        })),
+        attemptNumber: attemptCount + 1,
+        isRetake: attemptCount > 0,
       },
-    });
+    };
+
+    // Add comparison data if this is a retake
+    if (attemptCount === 1) {
+      const previousScore = existingScores[1]; // Get the first attempt
+      const scoreImprovement = score - previousScore.score;
+      const percentageImprovement = percentage - previousScore.percentage;
+
+      response.comparison = {
+        previousAttempt: {
+          score: previousScore.score,
+          percentage: previousScore.percentage,
+          completedAt: previousScore.completedAt,
+        },
+        improvement: {
+          score: scoreImprovement,
+          percentage: percentageImprovement,
+          status:
+            scoreImprovement > 0
+              ? "improved"
+              : scoreImprovement < 0
+              ? "declined"
+              : "same",
+        },
+      };
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -111,6 +166,7 @@ export const getUserScores = async (req, res) => {
     const scores = await Score.find({ user: req.user._id })
       .populate("exam", "title subject")
       .populate("exam.subject", "title")
+      .select("-answers")
       .sort({ completedAt: -1 });
 
     res.json({ scores });
@@ -144,6 +200,55 @@ export const getExamAnswers = async (req, res) => {
     res.json({
       message: "Exam answers retrieved successfully",
       result: score,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Check if user can take an exam
+export const checkExamEligibility = async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    const existingScores = await Score.find({
+      user: req.user._id,
+      exam: examId,
+    }).sort({ completedAt: -1 });
+
+    const latestScore = existingScores[0];
+    const attemptCount = existingScores.length;
+
+    let canTakeExam = true;
+    let message = "You can take this exam";
+    let remainingAttempts = 2 - attemptCount;
+
+    if (attemptCount >= 2) {
+      canTakeExam = false;
+      message = "You have used all attempts for this exam";
+      remainingAttempts = 0;
+    } else if (attemptCount === 1 && latestScore.percentage >= 50) {
+      canTakeExam = false;
+      message = "You have already passed this exam";
+      remainingAttempts = 0;
+    } else if (attemptCount === 1) {
+      message = "You can retake this exam (failed first attempt)";
+    }
+
+    res.json({
+      canTakeExam,
+      message,
+      attemptInfo: {
+        currentAttempts: attemptCount,
+        remainingAttempts,
+        maxAttempts: 2,
+      },
+      previousScores: existingScores.map((score) => ({
+        score: score.score,
+        percentage: score.percentage,
+        attemptNumber: score.attemptNumber,
+        completedAt: score.completedAt,
+      })),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
