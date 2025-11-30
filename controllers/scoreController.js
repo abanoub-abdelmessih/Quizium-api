@@ -1,6 +1,6 @@
-import Score from '../models/Score.js';
-import Exam from '../models/Exam.js';
-import Question from '../models/Question.js';
+import Score from "../models/Score.js";
+import Exam from "../models/Exam.js";
+import Question from "../models/Question.js";
 
 // Submit exam answers
 export const submitExam = async (req, res) => {
@@ -9,18 +9,18 @@ export const submitExam = async (req, res) => {
     const { answers } = req.body; // Array of { questionId, selectedAnswer }
 
     if (!answers || !Array.isArray(answers)) {
-      return res.status(400).json({ message: 'Answers must be an array' });
+      return res.status(400).json({ message: "Answers must be an array" });
     }
 
     const exam = await Exam.findById(examId);
     if (!exam) {
-      return res.status(404).json({ message: 'Exam not found' });
+      return res.status(404).json({ message: "Exam not found" });
     }
 
     // Get all questions for this exam
     const questions = await Question.find({ exam: examId });
     if (questions.length === 0) {
-      return res.status(400).json({ message: 'Exam has no questions' });
+      return res.status(400).json({ message: "Exam has no questions" });
     }
 
     let score = 0;
@@ -28,8 +28,12 @@ export const submitExam = async (req, res) => {
 
     // Check each answer
     for (const question of questions) {
-      const userAnswer = answers.find(a => a.questionId === question._id.toString());
-      const selectedAnswer = userAnswer ? parseInt(userAnswer.selectedAnswer) : null;
+      const userAnswer = answers.find(
+        (a) => a.questionId === question._id.toString()
+      );
+      const selectedAnswer = userAnswer
+        ? parseInt(userAnswer.selectedAnswer)
+        : null;
       const isCorrect = selectedAnswer === question.correctAnswer;
 
       if (isCorrect) {
@@ -39,7 +43,7 @@ export const submitExam = async (req, res) => {
       answerDetails.push({
         question: question._id,
         selectedAnswer,
-        isCorrect
+        isCorrect,
       });
     }
 
@@ -52,11 +56,11 @@ export const submitExam = async (req, res) => {
       score,
       totalMarks: exam.totalMarks,
       percentage: parseFloat(percentage.toFixed(2)),
-      answers: answerDetails
+      answers: answerDetails,
     });
 
     res.status(201).json({
-      message: 'Exam submitted successfully',
+      message: "Exam submitted successfully",
       result: {
         score,
         totalMarks: exam.totalMarks,
@@ -67,9 +71,9 @@ export const submitExam = async (req, res) => {
           correctAnswer: questions[index].correctAnswer,
           selectedAnswer: answer.selectedAnswer,
           isCorrect: answer.isCorrect,
-          marks: answer.isCorrect ? questions[index].marks : 0
-        }))
-      }
+          marks: answer.isCorrect ? questions[index].marks : 0,
+        })),
+      },
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -82,15 +86,17 @@ export const getExamResults = async (req, res) => {
     const { examId } = req.params;
     const score = await Score.findOne({
       user: req.user._id,
-      exam: examId
+      exam: examId,
     })
-      .populate('exam', 'title subject')
-      .populate('exam.subject', 'title')
-      .populate('answers.question', 'questionText options correctAnswer marks')
+      .populate("exam", "title subject")
+      .populate("exam.subject", "title")
+      .select("-answers")
       .sort({ completedAt: -1 });
 
     if (!score) {
-      return res.status(404).json({ message: 'No results found for this exam' });
+      return res
+        .status(404)
+        .json({ message: "No results found for this exam" });
     }
 
     res.json({ result: score });
@@ -103,8 +109,8 @@ export const getExamResults = async (req, res) => {
 export const getUserScores = async (req, res) => {
   try {
     const scores = await Score.find({ user: req.user._id })
-      .populate('exam', 'title subject')
-      .populate('exam.subject', 'title')
+      .populate("exam", "title subject")
+      .populate("exam.subject", "title")
       .sort({ completedAt: -1 });
 
     res.json({ scores });
@@ -112,4 +118,3 @@ export const getUserScores = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
