@@ -6,7 +6,7 @@ import User from "../models/User.js";
 // Create exam
 export const createExam = async (req, res) => {
   try {
-    const { title, description, subject, duration, totalMarks, difficulty } =
+    const { title, description, subject, duration, totalMarks, difficulty, status } =
       req.body;
 
     if (!title || !subject || !duration || !difficulty) {
@@ -23,6 +23,21 @@ export const createExam = async (req, res) => {
       });
     }
 
+    // Validate status - now required
+    const validStatuses = ['available', 'upcoming', 'archived'];
+
+    if (!status) {
+      return res.status(400).json({
+        message: "Status is required. Must be one of: available, upcoming, archived"
+      });
+    }
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status. Must be one of: available, upcoming, archived"
+      });
+    }
+
     const subjectExists = await Subject.findById(subject);
     if (!subjectExists) {
       return res.status(404).json({ message: "Subject not found" });
@@ -36,6 +51,7 @@ export const createExam = async (req, res) => {
       duration: parseInt(duration),
       totalMarks: totalMarks ? parseInt(totalMarks) : 0,
       createdBy: req.user._id,
+      status: status,
     });
 
     res.status(201).json({
@@ -61,6 +77,14 @@ export const getExams = async (req, res) => {
         query.difficulty = difficulty;
       }
     }
+
+    // Filter by status based on user role
+    const isUserAdmin = req.user?.isAdmin || false;
+
+    if (!isUserAdmin) {
+      query.status = { $in: ['available', 'upcoming'] };
+    }
+    // If user is admin, no status filter is applied (they can see all exams including archived)
 
     const exams = await Exam.find(query)
       .populate("subject", "title")
@@ -94,6 +118,14 @@ export const getAllExams = async (req, res) => {
         query.difficulty = difficulty;
       }
     }
+
+    // Filter by status based on user role
+    const isUserAdmin = req.user?.isAdmin || false;
+
+    if (!isUserAdmin) {
+      query.status = { $in: ['available', 'upcoming'] };
+    }
+    // If user is admin, no status filter is applied (they can see all exams including archived)
 
     const exams = await Exam.find(query)
       .populate("subject", "title")
@@ -133,7 +165,7 @@ export const getExam = async (req, res) => {
 // Update exam
 export const updateExam = async (req, res) => {
   try {
-    const { title, description, duration, totalMarks, difficulty } = req.body;
+    const { title, description, duration, totalMarks, difficulty, status } = req.body;
     const exam = await Exam.findById(req.params.id);
 
     if (!exam) {
@@ -153,6 +185,16 @@ export const updateExam = async (req, res) => {
         });
       }
       exam.difficulty = difficulty;
+    }
+
+    if (status !== undefined) {
+      const validStatuses = ['available', 'upcoming', 'archived'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "Invalid status. Must be one of: available, upcoming, archived"
+        });
+      }
+      exam.status = status;
     }
 
     await exam.save();

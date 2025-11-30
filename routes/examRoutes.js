@@ -11,8 +11,30 @@ import {
 
 const router = express.Router();
 
-// Public routes
-router.get("/", getExams);
+// Middleware to optionally authenticate (doesn't fail if no token)
+const optionalAuth = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (token) {
+      const jwt = (await import('jsonwebtoken')).default;
+      const User = (await import('../models/User.js')).default;
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.userId).select('-password');
+
+      if (user) {
+        req.user = user;
+      }
+    }
+  } catch (error) {
+    // Silently fail - user remains unauthenticated
+  }
+  next();
+};
+
+// Public routes (with optional auth for filtering)
+router.get("/", optionalAuth, getExams);
 router.get("/:id", getExam);
 
 // Admin routes

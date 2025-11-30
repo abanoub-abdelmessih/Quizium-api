@@ -35,6 +35,11 @@ const examSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    status: {
+      type: String,
+      enum: ['available', 'upcoming', 'archived'],
+      default: 'available'
+    },
   },
   {
     timestamps: true,
