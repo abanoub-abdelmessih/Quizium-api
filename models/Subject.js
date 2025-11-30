@@ -19,6 +19,11 @@ const subjectSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
+  },
+  status: {
+    type: String,
+    enum: ['available', 'upcoming', 'archived'],
+    default: 'available'
   }
 }, {
   timestamps: true,

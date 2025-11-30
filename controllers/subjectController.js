@@ -56,7 +56,7 @@ const deleteImageIfExists = async (imageUrl) => {
 // Create subject
 export const createSubject = async (req, res) => {
   try {
-    const { title, description, topics } = req.body;
+    const { title, description, topics, status } = req.body;
 
     const trimmedTitle = title?.trim();
     const cleanedDescription = sanitizeDescription(description || "");
@@ -75,6 +75,21 @@ export const createSubject = async (req, res) => {
       return res
         .status(400)
         .json({ message: "At least one valid topic is required" });
+    }
+
+    // Validate status - now required
+    const validStatuses = ['available', 'upcoming', 'archived'];
+
+    if (!status) {
+      return res.status(400).json({
+        message: "Status is required. Must be one of: available, upcoming, archived"
+      });
+    }
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        message: "Invalid status. Must be one of: available, upcoming, archived"
+      });
     }
 
     let imageUrl = null;
@@ -98,6 +113,7 @@ export const createSubject = async (req, res) => {
       description: cleanedDescription,
       image: imageUrl,
       createdBy: req.user._id,
+      status: status,
     });
 
     const topicsToInsert = parsedTopics.map((topic) => ({
@@ -126,7 +142,18 @@ export const createSubject = async (req, res) => {
 // Get all subjects
 export const getSubjects = async (req, res) => {
   try {
-    const subjects = await Subject.find()
+    // Build query filter based on user role
+    let filter = {};
+
+    // If user is not authenticated or not an admin, filter out archived subjects
+    const isUserAdmin = req.user?.isAdmin || false;
+
+    if (!isUserAdmin) {
+      filter.status = { $in: ['available', 'upcoming'] };
+    }
+    // If user is admin, no filter is applied (they can see all subjects including archived)
+
+    const subjects = await Subject.find(filter)
       .sort({ createdAt: -1 })
       .populate({
         path: "topics",
@@ -165,7 +192,7 @@ export const getSubject = async (req, res) => {
 // Update subject
 export const updateSubject = async (req, res) => {
   try {
-    const { title, description } = req.body;
+    const { title, description, status } = req.body;
     const subject = await Subject.findById(req.params.id);
 
     if (!subject) {
@@ -185,6 +212,15 @@ export const updateSubject = async (req, res) => {
         return res.status(400).json({ message: "Description cannot be empty" });
       }
       subject.description = cleanedDescription;
+    }
+    if (status !== undefined) {
+      const validStatuses = ['available', 'upcoming', 'archived'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          message: "Invalid status. Must be one of: available, upcoming, archived"
+        });
+      }
+      subject.status = status;
     }
 
     if (req.file) {

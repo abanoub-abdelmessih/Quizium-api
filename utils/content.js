@@ -67,13 +67,14 @@ export const formatSubjectResponse = (subjectDoc) => ({
   title: subjectDoc.title,
   description: subjectDoc.description,
   image: subjectDoc.image || null,
+  status: subjectDoc.status || 'available',
   topics: (subjectDoc.topics || []).map(formatTopicResponse),
   createdBy: subjectDoc.createdBy
     ? {
-        _id: subjectDoc.createdBy._id.toString(),
-        name: subjectDoc.createdBy.name,
-        email: subjectDoc.createdBy.email,
-      }
+      _id: subjectDoc.createdBy._id.toString(),
+      name: subjectDoc.createdBy.name,
+      email: subjectDoc.createdBy.email,
+    }
     : null,
   createdAt: subjectDoc.createdAt,
   updatedAt: subjectDoc.updatedAt,
