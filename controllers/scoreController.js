@@ -118,3 +118,34 @@ export const getUserScores = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get detailed exam answers (only for users who took the exam)
+export const getExamAnswers = async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    // Check if user has taken this exam
+    const score = await Score.findOne({
+      user: req.user._id,
+      exam: examId,
+    })
+      .populate("exam", "title subject")
+      .populate("exam.subject", "title")
+      .populate("answers.question", "questionText options correctAnswer marks")
+      .sort({ completedAt: -1 });
+
+    if (!score) {
+      return res.status(404).json({
+        message: "You have not taken this exam yet or no results found",
+      });
+    }
+
+    // Return the full result with answers
+    res.json({
+      message: "Exam answers retrieved successfully",
+      result: score,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
