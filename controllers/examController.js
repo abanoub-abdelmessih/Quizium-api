@@ -93,50 +93,53 @@ export const getExams = async (req, res) => {
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
 
-    res.json({
-      exams,
-      totalCount: exams.length,
-      filters: {
-        subject: subject || "all",
-        difficulty: difficulty || "all",
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+    // Fetch all user's scores to calculate eligibility
+    const Score = (await import('../models/Score.js')).default;
+    const userScores = await Score.find({ user: req.user._id });
 
-// Get all exams across all subjects with advanced filtering
-export const getAllExams = async (req, res) => {
-  try {
-    const { subject, difficulty } = req.query;
-    const query = {};
-
-    // Build query based on filters
-    if (subject) query.subject = subject;
-    if (difficulty) {
-      const validDifficulties = ["beginner", "intermediate", "advanced"];
-      if (validDifficulties.includes(difficulty)) {
-        query.difficulty = difficulty;
+    // Create a map of exam attempts for quick lookup
+    const examAttemptsMap = {};
+    userScores.forEach(score => {
+      const examId = score.exam.toString();
+      if (!examAttemptsMap[examId]) {
+        examAttemptsMap[examId] = [];
       }
-    }
+      examAttemptsMap[examId].push(score);
+    });
 
-    // Filter by status based on user role
-    const isUserAdmin = req.user?.isAdmin || false;
+    // Add eligibility information to each exam
+    const examsWithEligibility = exams.map(exam => {
+      const examId = exam._id.toString();
+      const attempts = examAttemptsMap[examId] || [];
+      const attemptCount = attempts.length;
 
-    if (!isUserAdmin) {
-      query.status = { $in: ['available', 'upcoming'] };
-    }
-    // If user is admin, no status filter is applied (they can see all exams including archived)
+      let canTakeExam = true;
+      let remainingAttempts = 2 - attemptCount;
 
-    const exams = await Exam.find(query)
-      .populate("subject", "title")
-      .populate("createdBy", "name email username")
-      .sort({ createdAt: -1 });
+      // Check if user has used all attempts
+      if (attemptCount >= 2) {
+        canTakeExam = false;
+        remainingAttempts = 0;
+      }
+      // Check if user passed on first attempt
+      else if (attemptCount === 1) {
+        const latestScore = attempts[0];
+        if (latestScore.percentage >= 50) {
+          canTakeExam = false;
+          remainingAttempts = 0;
+        }
+      }
+
+      return {
+        ...exam.toObject(),
+        canTakeExam,
+        remainingAttempts,
+      };
+    });
 
     res.json({
-      totalCount: exams.length,
-      exams,
+      exams: examsWithEligibility,
+      totalCount: examsWithEligibility.length,
       filters: {
         subject: subject || "all",
         difficulty: difficulty || "all",
@@ -146,6 +149,7 @@ export const getAllExams = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // Get single exam
 export const getExam = async (req, res) => {

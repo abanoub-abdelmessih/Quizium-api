@@ -33,8 +33,8 @@ const optionalAuth = async (req, res, next) => {
   next();
 };
 
-// Public routes (with optional auth for filtering)
-router.get("/", optionalAuth, getExams);
+// Main route - requires authentication
+router.get("/", authenticate, getExams);
 router.get("/:id", getExam);
 
 // Admin routes
