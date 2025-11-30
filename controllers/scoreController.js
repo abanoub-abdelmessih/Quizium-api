@@ -106,7 +106,7 @@ export const submitExam = async (req, res) => {
 
     // Add comparison data if this is a retake
     if (attemptCount === 1) {
-      const previousScore = existingScores[1]; // Get the first attempt
+      const previousScore = existingScores[0]; // Get the first attempt (latestScore)
       const scoreImprovement = score - previousScore.score;
       const percentageImprovement = percentage - previousScore.percentage;
 
@@ -123,8 +123,8 @@ export const submitExam = async (req, res) => {
             scoreImprovement > 0
               ? "improved"
               : scoreImprovement < 0
-              ? "declined"
-              : "same",
+                ? "declined"
+                : "same",
         },
       };
     }
