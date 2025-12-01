@@ -93,6 +93,11 @@ export const submitExam = async (req, res) => {
       attemptNumber: attemptCount + 1,
     });
 
+    // Calculate answer statistics
+    const correctAnswers = answerDetails.filter(a => a.isCorrect).length;
+    const incorrectAnswers = answerDetails.filter(a => !a.isCorrect).length;
+    const totalQuestions = questions.length;
+
     const response = {
       message: "Exam submitted successfully",
       result: {
@@ -101,6 +106,9 @@ export const submitExam = async (req, res) => {
         percentage: parseFloat(percentage.toFixed(2)),
         attemptNumber: attemptCount + 1,
         isRetake: attemptCount > 0,
+        totalQuestions,
+        correctAnswers,
+        incorrectAnswers,
       },
     };
 
