@@ -114,25 +114,30 @@ export const getExams = async (req, res) => {
       const attemptCount = attempts.length;
 
       let canTakeExam = true;
+      let isPassed = false;
       let remainingAttempts = 2 - attemptCount;
+
+      // Check if user has passed in any attempt
+      const passedAttempt = attempts.find(attempt => attempt.percentage >= 50);
+      if (passedAttempt) {
+        isPassed = true;
+      }
 
       // Check if user has used all attempts
       if (attemptCount >= 2) {
         canTakeExam = false;
         remainingAttempts = 0;
       }
-      // Check if user passed on first attempt
-      else if (attemptCount === 1) {
-        const latestScore = attempts[0];
-        if (latestScore.percentage >= 50) {
-          canTakeExam = false;
-          remainingAttempts = 0;
-        }
+      // Check if user passed on first attempt or any attempt
+      else if (isPassed) {
+        canTakeExam = false;
+        remainingAttempts = 0;
       }
 
       return {
         ...exam.toObject(),
         canTakeExam,
+        isPassed,
         remainingAttempts,
       };
     });
