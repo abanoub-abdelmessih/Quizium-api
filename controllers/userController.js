@@ -419,3 +419,58 @@ export const deleteProfileImage = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Get performance statistics for last 7 quizzes
+export const getPerformanceStats = async (req, res) => {
+  try {
+    // Fetch last 7 quiz attempts for the authenticated user
+    const recentScores = await Score.find({ user: req.user._id })
+      .sort({ completedAt: -1 })
+      .limit(7)
+      .populate("exam", "title")
+      .populate({
+        path: "exam",
+        populate: {
+          path: "subject",
+          select: "title",
+        },
+      });
+
+    if (!recentScores || recentScores.length === 0) {
+      return res.json({
+        performanceData: [],
+        overallAverage: 0,
+        totalQuizzes: 0,
+        message: "No quiz attempts found",
+      });
+    }
+
+    // Format data for chart visualization
+    const performanceData = recentScores.map((score) => ({
+      examTitle: score.exam?.title || "Unknown Exam",
+      subject: score.exam?.subject?.title || "Unknown Subject",
+      score: score.score,
+      totalMarks: score.totalMarks,
+      percentage: score.percentage,
+      completedAt: score.completedAt,
+      attemptNumber: score.attemptNumber,
+    }));
+
+    // Calculate overall average percentage
+    const totalPercentage = recentScores.reduce(
+      (sum, score) => sum + score.percentage,
+      0
+    );
+    const overallAverage = parseFloat(
+      (totalPercentage / recentScores.length).toFixed(2)
+    );
+
+    res.json({
+      performanceData,
+      overallAverage,
+      totalQuizzes: recentScores.length,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

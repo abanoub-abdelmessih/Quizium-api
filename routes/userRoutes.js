@@ -11,6 +11,7 @@ import {
   getAllUsers,
   deleteAllUsers,
   deleteProfileImage,
+  getPerformanceStats,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -27,6 +28,7 @@ router.post("/profile/image", uploadMiddleware, uploadProfileImage);
 router.delete("/profile/image", deleteProfileImage);
 router.put("/change-password", changePassword);
 router.delete("/account", deleteAccount);
+router.get("/performance-stats", getPerformanceStats);
 
 // ! Admin only route
 
