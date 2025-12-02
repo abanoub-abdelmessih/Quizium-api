@@ -68,7 +68,7 @@ export const createExam = async (req, res) => {
 // Get all exams with filtering by subject
 export const getExams = async (req, res) => {
   try {
-    const { subject, difficulty } = req.query;
+    const { subject, difficulty, limit, sort } = req.query;
     const query = {};
 
     // Build query based on filters
@@ -88,10 +88,24 @@ export const getExams = async (req, res) => {
     }
     // If user is admin, no status filter is applied (they can see all exams including archived)
 
-    const exams = await Exam.find(query)
+    // Determine sort order
+    const sortOrder = sort === 'oldest' ? 1 : -1; // Default to 'latest' (-1)
+
+    // Build the query with optional limit
+    let examQuery = Exam.find(query)
       .populate("subject", "title")
       .populate("createdBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: sortOrder });
+
+    // Apply limit if provided
+    if (limit) {
+      const limitNum = parseInt(limit);
+      if (limitNum > 0) {
+        examQuery = examQuery.limit(limitNum);
+      }
+    }
+
+    const exams = await examQuery;
 
     // Fetch all user's scores to calculate eligibility
     const Score = (await import('../models/Score.js')).default;
@@ -148,6 +162,8 @@ export const getExams = async (req, res) => {
       filters: {
         subject: subject || "all",
         difficulty: difficulty || "all",
+        limit: limit ? parseInt(limit) : "all",
+        sort: sort || "latest",
       },
     });
   } catch (error) {

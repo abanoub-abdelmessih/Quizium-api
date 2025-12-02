@@ -20,10 +20,56 @@ export const getProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Get user's quiz statistics
+    const userScores = await Score.find({ user: req.user._id });
+    const totalQuizzesTaken = userScores.length;
+    const totalPointsGained = userScores.reduce((sum, score) => sum + score.score, 0);
+
+    // Calculate user's rank in the leaderboard
+    // Get all users' best scores
+    const allScores = await Score.find().populate('user', '_id');
+
+    // Group by user to get their best scores
+    const userBestScores = {};
+    allScores.forEach(score => {
+      const userId = score.user._id.toString();
+      if (!userBestScores[userId] || score.score > userBestScores[userId]) {
+        userBestScores[userId] = score.score;
+      }
+    });
+
+    // Convert to array and sort by score (descending)
+    const sortedUsers = Object.entries(userBestScores)
+      .map(([userId, bestScore]) => ({ userId, bestScore }))
+      .sort((a, b) => b.bestScore - a.bestScore);
+
+    // Find user's rank
+    const userBestScore = userBestScores[req.user._id.toString()] || 0;
+    let rank = sortedUsers.findIndex(u => u.userId === req.user._id.toString()) + 1;
+
+    // If user has no scores, rank is last
+    if (rank === 0) {
+      rank = sortedUsers.length + 1;
+    }
+
+    const totalUsers = sortedUsers.length || 1;
+    const percentageRank = (rank / totalUsers) * 100;
+
+    // Generate top percentage message if user is in top 5%
+    let topPercentageMessage = null;
+    if (percentageRank <= 5 && rank > 0) {
+      const roundedPercentage = Math.ceil(percentageRank);
+      topPercentageMessage = `You are in the top ${roundedPercentage}% of ${totalUsers} learners!`;
+    }
+
     res.json({
       user: {
         ...user.toObject(),
         profileImage: user.profileImage, // Already a Cloudinary URL
+        rank: rank,
+        topPercentageMessage: topPercentageMessage,
+        totalQuizzesTaken: totalQuizzesTaken,
+        totalPointsGained: totalPointsGained,
       },
     });
   } catch (error) {

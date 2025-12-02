@@ -5,18 +5,33 @@ import User from '../models/User.js';
 export const getLeaderboard = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
+    const filter = req.query.filter || 'all'; // 'all', 'week', 'month'
 
-    // Get top scores with user and exam details
-    const topScores = await Score.find()
+    // Build date filter based on time period
+    let dateFilter = {};
+    const now = new Date();
+
+    if (filter === 'week') {
+      // Last 7 days
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      dateFilter.completedAt = { $gte: weekAgo };
+    } else if (filter === 'month') {
+      // Last 30 days
+      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      dateFilter.completedAt = { $gte: monthAgo };
+    }
+    // If filter is 'all', no date filter is applied
+
+    // Get top scores with user and exam details, applying date filter
+    const topScores = await Score.find(dateFilter)
       .populate('user', 'name email profileImage')
       .populate('exam', 'title subject')
       .populate('exam.subject', 'title')
-      .sort({ score: -1, completedAt: -1 })
-      .limit(limit);
+      .sort({ score: -1, completedAt: -1 });
 
     // Group by user to get their best scores
     const userBestScores = {};
-    
+
     topScores.forEach(score => {
       const userId = score.user._id.toString();
       if (!userBestScores[userId] || score.score > userBestScores[userId].score) {
@@ -39,6 +54,7 @@ export const getLeaderboard = async (req, res) => {
     // Convert to array and sort
     const leaderboard = Object.values(userBestScores)
       .sort((a, b) => b.score - a.score)
+      .slice(0, limit) // Apply limit
       .map((entry, index) => ({
         rank: index + 1,
         ...entry
@@ -46,7 +62,9 @@ export const getLeaderboard = async (req, res) => {
 
     res.json({
       leaderboard,
-      total: leaderboard.length
+      total: leaderboard.length,
+      filter: filter,
+      limit: limit
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
