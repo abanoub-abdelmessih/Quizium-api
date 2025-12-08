@@ -23,17 +23,35 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Middleware - Handle CORS
-app.use(cors({
-  origin: '*',
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: false,
   preflightContinue: false,
   optionsSuccessStatus: 204
-}));
+};
 
-// Handle preflight requests explicitly
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Additional CORS headers middleware for Vercel
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, Origin');
+
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
