@@ -5,8 +5,8 @@ It handles users, exams, questions, scoring, subjects, and all admin operations.
 This API is intended to be used **exclusively** by the official Quizium frontend:
 
 👉 **Frontend App:**  
-https://quizium-eight.vercel.app/
-
+[https://quizium-one.vercel.app/
+](https://quizium-one.vercel.app/)
 ---
 
 ## 🚀 Overview
