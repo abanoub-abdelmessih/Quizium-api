@@ -4,8 +4,7 @@ Quizium API is the backend powering the Quizium examination platform.
 It handles users, exams, questions, scoring, subjects, and all admin operations.  
 This API is intended to be used **exclusively** by the official Quizium frontend:
 
-👉 **Frontend App:**  
-[https://quizium-one.vercel.app/
+👉 **Frontend App :** [https://quizium-one.vercel.app/
 ](https://quizium-one.vercel.app/)
 ---
 
