@@ -1,0 +1,15 @@
+name: Ping API every 12 hours
+
+on:
+  schedule:
+    - cron: "0 */12 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send GET request
+        run: |
+          curl -X GET ${{ secrets.BASE_URL }}/health -i
