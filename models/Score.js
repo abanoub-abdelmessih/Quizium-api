@@ -1,46 +1,127 @@
-import mongoose from 'mongoose';
+import { getDB } from '../config/database.js';
 
-const scoreSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+const COLLECTION = 'scores';
+
+const ScoreModel = {
+  async create(data) {
+    const db = getDB();
+    const now = new Date().toISOString();
+
+    const scoreData = {
+      user: data.user,
+      exam: data.exam,
+      score: data.score,
+      totalMarks: data.totalMarks,
+      percentage: data.percentage,
+      answers: data.answers || [],
+      completedAt: data.completedAt || now,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const docRef = await db.collection(COLLECTION).add(scoreData);
+    return attachMethods({ _id: docRef.id, id: docRef.id, ...scoreData });
   },
-  exam: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Exam',
-    required: true
+
+  async findById(id) {
+    if (!id) return null;
+    const db = getDB();
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) return null;
+    return attachMethods({ _id: doc.id, id: doc.id, ...doc.data() });
   },
-  score: {
-    type: Number,
-    required: true
+
+  async findOne(query, options = {}) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
+    }
+
+    if (options.sort) {
+      for (const [key, order] of Object.entries(options.sort)) {
+        ref = ref.orderBy(key, order === -1 ? 'desc' : 'asc');
+      }
+    }
+
+    const snapshot = await ref.limit(1).get();
+    if (snapshot.empty) return null;
+
+    const doc = snapshot.docs[0];
+    return attachMethods({ _id: doc.id, id: doc.id, ...doc.data() });
   },
-  totalMarks: {
-    type: Number,
-    required: true
+
+  async find(query = {}, options = {}) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
+    }
+
+    if (options.sort) {
+      for (const [key, order] of Object.entries(options.sort)) {
+        ref = ref.orderBy(key, order === -1 ? 'desc' : 'asc');
+      }
+    }
+
+    if (options.limit) {
+      ref = ref.limit(options.limit);
+    }
+
+    const snapshot = await ref.get();
+    return snapshot.docs.map(doc =>
+      attachMethods({ _id: doc.id, id: doc.id, ...doc.data() })
+    );
   },
-  percentage: {
-    type: Number,
-    required: true
+
+  async deleteMany(query) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
+    }
+
+    const snapshot = await ref.get();
+    const batch = db.batch();
+
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    return { deletedCount: snapshot.size };
   },
-  answers: [{
-    question: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Question'
-    },
-    selectedAnswer: Number,
-    isCorrect: Boolean
-  }],
-  completedAt: {
-    type: Date,
-    default: Date.now
+
+  async save(doc) {
+    const db = getDB();
+    const id = doc._id || doc.id;
+    const now = new Date().toISOString();
+
+    const updateData = { ...doc, updatedAt: now };
+    delete updateData._id;
+    delete updateData.id;
+    delete updateData.save;
+    delete updateData.toObject;
+
+    await db.collection(COLLECTION).doc(id).set(updateData, { merge: true });
+    return this.findById(id);
   }
-}, {
-  timestamps: true
-});
+};
 
-// Index for leaderboard queries
-scoreSchema.index({ score: -1, completedAt: -1 });
+function attachMethods(data) {
+  data.save = async function() {
+    return ScoreModel.save(this);
+  };
 
-export default mongoose.model('Score', scoreSchema);
+  data.toObject = function() {
+    const obj = { ...this };
+    delete obj.save;
+    delete obj.toObject;
+    return obj;
+  };
 
+  return data;
+}
+
+export default ScoreModel;

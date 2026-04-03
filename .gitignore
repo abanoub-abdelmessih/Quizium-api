@@ -30,8 +30,13 @@ files/
 # Optional npm cache
 .npm
 
+# Firebase
+serviceAccountKey.json
+id-mapping.json
+
 # Project-specific files you don't want to track
 db.txt
 api.txt
+*.txt
 Cloudinary.txt
-.env.example
+# .env.example

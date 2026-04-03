@@ -11,15 +11,16 @@ const __dirname = path.dirname(__filename);
 // Get user profile
 export const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password -otp');
+    const user = await User.findById(req.user._id, '-password -otp');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const userObj = user.toObject ? user.toObject() : { ...user };
     res.json({
       user: {
-        ...user.toObject(),
-        profileImage: user.profileImage // Already a Cloudinary URL
+        ...userObj,
+        profileImage: userObj.profileImage
       }
     });
   } catch (error) {
@@ -32,8 +33,10 @@ export const getPublicProfile = async (req, res) => {
   try {
     const { username } = req.params;
     
-    const user = await User.findOne({ username: username.toLowerCase() })
-      .select('username name profileImage createdAt');
+    const user = await User.findOne(
+      { username: username.toLowerCase() },
+      'username name profileImage createdAt'
+    );
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -194,4 +197,3 @@ export const deleteAccount = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-

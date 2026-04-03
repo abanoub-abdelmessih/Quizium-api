@@ -32,13 +32,9 @@ export const createQuestion = async (req, res) => {
       createdBy: req.user._id
     });
 
-    // Update exam total marks
-    const totalMarks = await Question.aggregate([
-      { $match: { exam: examExists._id } },
-      { $group: { _id: null, total: { $sum: '$marks' } } }
-    ]);
-
-    examExists.totalMarks = totalMarks[0]?.total || 0;
+    // Update exam total marks (replaces MongoDB aggregate)
+    const totalMarks = await Question.sumMarksForExam(examExists._id);
+    examExists.totalMarks = totalMarks;
     await examExists.save();
 
     res.status(201).json({
@@ -54,14 +50,12 @@ export const createQuestion = async (req, res) => {
 export const getQuestions = async (req, res) => {
   try {
     const { examId } = req.params;
-    const questions = await Question.find({ exam: examId })
-      .populate('createdBy', 'name email')
-      .sort({ createdAt: 1 });
+    const questions = await Question.find({ exam: examId }, { sort: { createdAt: 1 } });
 
     // Hide correct answers for non-admin users
     const isAdmin = req.user && req.user.isAdmin;
     const questionsToReturn = questions.map(q => {
-      const questionObj = q.toObject();
+      const questionObj = q.toObject ? q.toObject() : { ...q };
       if (!isAdmin) {
         delete questionObj.correctAnswer;
       }
@@ -77,9 +71,7 @@ export const getQuestions = async (req, res) => {
 // Get single question
 export const getQuestion = async (req, res) => {
   try {
-    const question = await Question.findById(req.params.id)
-      .populate('exam', 'title')
-      .populate('createdBy', 'name email');
+    const question = await Question.findById(req.params.id);
 
     if (!question) {
       return res.status(404).json({ message: 'Question not found' });
@@ -87,7 +79,7 @@ export const getQuestion = async (req, res) => {
 
     // Hide correct answer for non-admin users
     const isAdmin = req.user && req.user.isAdmin;
-    const questionObj = question.toObject();
+    const questionObj = question.toObject ? question.toObject() : { ...question };
     if (!isAdmin) {
       delete questionObj.correctAnswer;
     }
@@ -126,14 +118,10 @@ export const updateQuestion = async (req, res) => {
 
     await question.save();
 
-    // Update exam total marks
+    // Update exam total marks (replaces MongoDB aggregate)
     const exam = await Exam.findById(question.exam);
-    const totalMarks = await Question.aggregate([
-      { $match: { exam: exam._id } },
-      { $group: { _id: null, total: { $sum: '$marks' } } }
-    ]);
-
-    exam.totalMarks = totalMarks[0]?.total || 0;
+    const totalMarks = await Question.sumMarksForExam(exam._id);
+    exam.totalMarks = totalMarks;
     await exam.save();
 
     res.json({
@@ -157,14 +145,10 @@ export const deleteQuestion = async (req, res) => {
     const examId = question.exam;
     await Question.findByIdAndDelete(question._id);
 
-    // Update exam total marks
+    // Update exam total marks (replaces MongoDB aggregate)
     const exam = await Exam.findById(examId);
-    const totalMarks = await Question.aggregate([
-      { $match: { exam: examId } },
-      { $group: { _id: null, total: { $sum: '$marks' } } }
-    ]);
-
-    exam.totalMarks = totalMarks[0]?.total || 0;
+    const totalMarks = await Question.sumMarksForExam(examId);
+    exam.totalMarks = totalMarks;
     await exam.save();
 
     res.json({ message: 'Question deleted successfully' });
@@ -172,4 +156,3 @@ export const deleteQuestion = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-

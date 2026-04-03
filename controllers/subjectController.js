@@ -13,11 +13,8 @@ import {
   formatSubjectResponse,
 } from "../utils/content.js";
 
-const populateSubjectWithTopics = (subjectId) => {
-  return Subject.findById(subjectId).populate({
-    path: "topics",
-    options: { sort: { createdAt: 1 } },
-  });
+const populateSubjectWithTopics = async (subjectId) => {
+  return Subject.populateWithTopics(subjectId);
 };
 
 const sanitizeTopicPayload = (topic) => {
@@ -123,15 +120,17 @@ export const createSubject = async (req, res) => {
 // Get all subjects
 export const getSubjects = async (req, res) => {
   try {
-    const subjects = await Subject.find()
-      .sort({ createdAt: -1 })
-      .populate({
-        path: "topics",
-        options: { sort: { createdAt: 1 } },
-      });
+    const subjects = await Subject.find({}, { sort: { createdAt: -1 } });
+
+    // Populate topics for each subject
+    const populatedSubjects = await Promise.all(
+      subjects.map(async (subject) => {
+        return Subject.populateWithTopics(subject);
+      })
+    );
 
     res.json({
-      subjects: subjects.map(formatSubjectResponse),
+      subjects: populatedSubjects.map(formatSubjectResponse),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -216,18 +215,20 @@ export const updateSubject = async (req, res) => {
 // Delete subject
 export const deleteSubject = async (req, res) => {
   try {
-    const subject = await Subject.findById(req.params.id).populate("topics");
+    const subject = await Subject.findById(req.params.id);
 
     if (!subject) {
       return res.status(404).json({ message: "Subject not found" });
     }
 
+    // Get topics for this subject to delete their images
+    const topics = await Topic.find({ subject: subject._id });
+
     if (subject.image) {
       await deleteImageIfExists(subject.image);
     }
 
-    const topicImages =
-      subject.topics?.map((topic) => topic.image).filter(Boolean) || [];
+    const topicImages = topics.map((topic) => topic.image).filter(Boolean);
     await Promise.all(topicImages.map(deleteImageIfExists));
 
     await Topic.deleteMany({ subject: subject._id });

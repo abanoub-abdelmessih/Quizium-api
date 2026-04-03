@@ -33,7 +33,7 @@ if (process.env.VERCEL !== '1') {
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 }
 
-// Connect to database before handling requests
+// Connect to Firebase before handling requests
 app.use(async (req, res, next) => {
   try {
     await connectDB();
@@ -60,7 +60,7 @@ app.use('/api/leaderboard', leaderboardRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Quizium API is running' });
+  res.json({ status: 'OK', message: 'Quizium API is running (Firebase)' });
 });
 
 // Error handling middleware
@@ -92,4 +92,3 @@ if (process.env.VERCEL !== '1') {
 
 // Export for Vercel serverless
 export default app;
-

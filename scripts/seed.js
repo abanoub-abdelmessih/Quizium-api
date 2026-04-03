@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import connectDB from '../config/database.js';
+import connectDB, { getDB } from '../config/database.js';
 import User from '../models/User.js';
 import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
@@ -14,7 +14,7 @@ const ADMIN_PASSWORD = 'quiziumAdmin1103';
 const seedData = async () => {
   try {
     await connectDB();
-    console.log('Connected to database');
+    console.log('Connected to Firebase');
 
     // Create admin accounts
     console.log('Creating admin accounts...');
@@ -161,12 +161,8 @@ const seedData = async () => {
     }
 
     // Update exam total marks
-    const totalMarks = await Question.aggregate([
-      { $match: { exam: exam._id } },
-      { $group: { _id: null, total: { $sum: '$marks' } } }
-    ]);
-
-    exam.totalMarks = totalMarks[0]?.total || 0;
+    const totalMarks = await Question.sumMarksForExam(exam._id);
+    exam.totalMarks = totalMarks;
     await exam.save();
 
     console.log(`Created ${createdCount} new questions`);
@@ -181,4 +177,3 @@ const seedData = async () => {
 };
 
 seedData();
-

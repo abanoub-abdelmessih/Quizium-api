@@ -28,20 +28,16 @@ export const register = async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
-    const existingUser = await User.findOne({ 
-      $or: [
-        { email: email.toLowerCase() },
-        { username: username.toLowerCase() }
-      ]
-    });
-    
-    if (existingUser) {
-      if (existingUser.email === email.toLowerCase()) {
-        return res.status(400).json({ message: 'User with this email already exists' });
-      }
-      if (existingUser.username === username.toLowerCase()) {
-        return res.status(400).json({ message: 'Username already taken' });
-      }
+    // Check for existing user by email
+    const existingByEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingByEmail) {
+      return res.status(400).json({ message: 'User with this email already exists' });
+    }
+
+    // Check for existing user by username
+    const existingByUsername = await User.findOne({ username: username.toLowerCase() });
+    if (existingByUsername) {
+      return res.status(400).json({ message: 'Username already taken' });
     }
 
     const user = await User.create({ 
@@ -64,13 +60,6 @@ export const register = async (req, res) => {
       }
     });
   } catch (error) {
-    if (error.code === 11000) {
-      // Duplicate key error
-      const field = Object.keys(error.keyPattern)[0];
-      return res.status(400).json({ 
-        message: `${field === 'username' ? 'Username' : 'Email'} already exists` 
-      });
-    }
     res.status(500).json({ message: error.message });
   }
 };
@@ -169,7 +158,7 @@ export const forgotPassword = async (req, res) => {
     const otp = generateOTP();
     user.otp = {
       code: otp,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
     };
     await user.save();
 
@@ -206,7 +195,7 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Invalid OTP' });
     }
 
-    if (new Date() > user.otp.expiresAt) {
+    if (new Date() > new Date(user.otp.expiresAt)) {
       return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
     }
 
@@ -240,13 +229,13 @@ export const setNewPassword = async (req, res) => {
     }
 
     // Check if OTP is still valid
-    if (new Date() > user.otp.expiresAt) {
+    if (new Date() > new Date(user.otp.expiresAt)) {
       return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
     }
 
     // Update password and clear OTP
     user.password = newPassword;
-    user.otp = undefined;
+    user.otp = null;
     await user.save();
 
     res.json({ message: 'Password updated successfully' });
@@ -254,4 +243,3 @@ export const setNewPassword = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-

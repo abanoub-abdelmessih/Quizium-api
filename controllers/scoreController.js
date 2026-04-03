@@ -80,20 +80,42 @@ export const submitExam = async (req, res) => {
 export const getExamResults = async (req, res) => {
   try {
     const { examId } = req.params;
-    const score = await Score.findOne({
-      user: req.user._id,
-      exam: examId
-    })
-      .populate('exam', 'title subject')
-      .populate('exam.subject', 'title')
-      .populate('answers.question', 'questionText options correctAnswer marks')
-      .sort({ completedAt: -1 });
+    const scoreDoc = await Score.findOne(
+      { user: req.user._id, exam: examId },
+      { sort: { completedAt: -1 } }
+    );
 
-    if (!score) {
+    if (!scoreDoc) {
       return res.status(404).json({ message: 'No results found for this exam' });
     }
 
-    res.json({ result: score });
+    // Populate exam
+    if (scoreDoc.exam && typeof scoreDoc.exam === 'string') {
+      const exam = await Exam.findById(scoreDoc.exam);
+      if (exam) {
+        scoreDoc.exam = { _id: exam._id, title: exam.title, subject: exam.subject };
+      }
+    }
+
+    // Populate answers with question details
+    if (scoreDoc.answers && Array.isArray(scoreDoc.answers)) {
+      for (const answer of scoreDoc.answers) {
+        if (answer.question && typeof answer.question === 'string') {
+          const question = await Question.findById(answer.question);
+          if (question) {
+            answer.question = {
+              _id: question._id,
+              questionText: question.questionText,
+              options: question.options,
+              correctAnswer: question.correctAnswer,
+              marks: question.marks
+            };
+          }
+        }
+      }
+    }
+
+    res.json({ result: scoreDoc });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -102,14 +124,23 @@ export const getExamResults = async (req, res) => {
 // Get all user's scores
 export const getUserScores = async (req, res) => {
   try {
-    const scores = await Score.find({ user: req.user._id })
-      .populate('exam', 'title subject')
-      .populate('exam.subject', 'title')
-      .sort({ completedAt: -1 });
+    const scores = await Score.find(
+      { user: req.user._id },
+      { sort: { completedAt: -1 } }
+    );
+
+    // Populate exam info for each score
+    for (const score of scores) {
+      if (score.exam && typeof score.exam === 'string') {
+        const exam = await Exam.findById(score.exam);
+        if (exam) {
+          score.exam = { _id: exam._id, title: exam.title, subject: exam.subject };
+        }
+      }
+    }
 
     res.json({ scores });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-

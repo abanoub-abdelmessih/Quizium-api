@@ -1,47 +1,139 @@
-import mongoose from 'mongoose';
+import { getDB } from '../config/database.js';
 
-const questionSchema = new mongoose.Schema({
-  exam: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Exam',
-    required: true
+const COLLECTION = 'questions';
+
+const QuestionModel = {
+  async create(data) {
+    const db = getDB();
+    const now = new Date().toISOString();
+
+    const questionData = {
+      exam: data.exam,
+      questionText: data.questionText,
+      options: data.options,
+      correctAnswer: data.correctAnswer,
+      marks: data.marks || 1,
+      createdBy: data.createdBy,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const docRef = await db.collection(COLLECTION).add(questionData);
+    return attachMethods({ _id: docRef.id, id: docRef.id, ...questionData });
   },
-  questionText: {
-    type: String,
-    required: true
+
+  async findById(id) {
+    if (!id) return null;
+    const db = getDB();
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) return null;
+    return attachMethods({ _id: doc.id, id: doc.id, ...doc.data() });
   },
-  options: {
-    type: [String],
-    required: true,
-    validate: {
-      validator: function(v) {
-        return v.length >= 2 && v.length <= 6;
-      },
-      message: 'Question must have between 2 and 6 options'
+
+  async findOne(query) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
     }
+
+    const snapshot = await ref.limit(1).get();
+    if (snapshot.empty) return null;
+
+    const doc = snapshot.docs[0];
+    return attachMethods({ _id: doc.id, id: doc.id, ...doc.data() });
   },
-  correctAnswer: {
-    type: Number, // index of correct option (0-based)
-    required: true,
-    validate: {
-      validator: function(v) {
-        return v >= 0 && v < this.options.length;
-      },
-      message: 'Correct answer index must be within options range'
+
+  async find(query = {}, options = {}) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
     }
+
+    if (options.sort) {
+      for (const [key, order] of Object.entries(options.sort)) {
+        ref = ref.orderBy(key, order === -1 ? 'desc' : 'asc');
+      }
+    }
+
+    const snapshot = await ref.get();
+    return snapshot.docs.map(doc =>
+      attachMethods({ _id: doc.id, id: doc.id, ...doc.data() })
+    );
   },
-  marks: {
-    type: Number,
-    default: 1
+
+  async findByIdAndDelete(id) {
+    const db = getDB();
+    await db.collection(COLLECTION).doc(id).delete();
+    return true;
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+
+  async deleteMany(query) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
+    }
+
+    const snapshot = await ref.get();
+    const batch = db.batch();
+
+    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+    await batch.commit();
+
+    return { deletedCount: snapshot.size };
+  },
+
+  /**
+   * Calculate total marks for an exam (replaces MongoDB aggregate)
+   */
+  async sumMarksForExam(examId) {
+    const db = getDB();
+    const snapshot = await db.collection(COLLECTION)
+      .where('exam', '==', examId)
+      .get();
+
+    let total = 0;
+    snapshot.docs.forEach(doc => {
+      total += doc.data().marks || 0;
+    });
+
+    return total;
+  },
+
+  async save(doc) {
+    const db = getDB();
+    const id = doc._id || doc.id;
+    const now = new Date().toISOString();
+
+    const updateData = { ...doc, updatedAt: now };
+    delete updateData._id;
+    delete updateData.id;
+    delete updateData.save;
+    delete updateData.toObject;
+
+    await db.collection(COLLECTION).doc(id).set(updateData, { merge: true });
+    return this.findById(id);
   }
-}, {
-  timestamps: true
-});
+};
 
-export default mongoose.model('Question', questionSchema);
+function attachMethods(data) {
+  data.save = async function() {
+    return QuestionModel.save(this);
+  };
 
+  data.toObject = function() {
+    const obj = { ...this };
+    delete obj.save;
+    delete obj.toObject;
+    return obj;
+  };
+
+  return data;
+}
+
+export default QuestionModel;

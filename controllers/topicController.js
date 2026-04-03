@@ -24,6 +24,11 @@ const ensureSubject = async (subjectId) => {
 const findTopic = async (subjectId, topicId) => {
   const topic = await Topic.findOne({ _id: topicId, subject: subjectId });
   if (!topic) {
+    // Also try finding by just the topicId (Firestore IDs)
+    const topicById = await Topic.findById(topicId);
+    if (topicById && topicById.subject === subjectId) {
+      return topicById;
+    }
     const error = new Error("Topic not found");
     error.statusCode = 404;
     throw error;
@@ -101,9 +106,7 @@ export const getTopics = async (req, res) => {
     const { id: subjectId } = req.params;
     await ensureSubject(subjectId);
 
-    const topics = await Topic.find({ subject: subjectId }).sort({
-      createdAt: 1,
-    });
+    const topics = await Topic.find({ subject: subjectId }, { sort: { createdAt: 1 } });
 
     res.json({
       topics: topics.map(formatTopicResponse),

@@ -1,43 +1,67 @@
-import mongoose from 'mongoose';
+import admin from 'firebase-admin';
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-// Cache the connection for serverless environments
-let cached = global.mongoose;
+dotenv.config();
 
-if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+let db = null;
 
 const connectDB = async () => {
-  // If already connected, return cached connection
-  if (cached.conn) {
-    return cached.conn;
-  }
-
-  // If connection is in progress, wait for it
-  if (!cached.promise) {
-    const opts = {
-      bufferCommands: false,
-    };
-
-    cached.promise = mongoose.connect(process.env.MONGODB_URI, opts).then((mongoose) => {
-      console.log('MongoDB Connected');
-      return mongoose;
-    }).catch((error) => {
-      console.error('Database connection error:', error.message);
-      cached.promise = null;
-      throw error;
-    });
+  if (db) {
+    return db;
   }
 
   try {
-    cached.conn = await cached.promise;
-  } catch (e) {
-    cached.promise = null;
-    throw e;
-  }
+    // Try loading from service account file first
+    const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+      || path.join(__dirname, '..', 'serviceAccountKey.json');
 
-  return cached.conn;
+    if (fs.existsSync(serviceAccountPath)) {
+      const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'));
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    } else if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      // Fallback to .env variables
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+        })
+      });
+    } else {
+      throw new Error(
+        'Firebase credentials not found. Either place serviceAccountKey.json in the project root ' +
+        'or set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in .env'
+      );
+    }
+
+    db = admin.firestore();
+    console.log('Firebase Firestore Connected');
+    return db;
+  } catch (error) {
+    // If already initialized, just get the firestore instance
+    if (error.code === 'app/duplicate-app') {
+      db = admin.firestore();
+      return db;
+    }
+    console.error('Firebase connection error:', error.message);
+    throw error;
+  }
 };
 
-export default connectDB;
+export const getDB = () => {
+  if (!db) {
+    throw new Error('Database not initialized. Call connectDB() first.');
+  }
+  return db;
+};
 
+export { admin };
+export default connectDB;
