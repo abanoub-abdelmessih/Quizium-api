@@ -42,6 +42,7 @@ const SubjectModel = {
     const doc = snapshot.docs[0];
     return attachMethods({ _id: doc.id, id: doc.id, ...doc.data() });
   },
+<<<<<<< HEAD
 
   async find(query = {}, options = {}) {
     const db = getDB();
@@ -119,6 +120,17 @@ const SubjectModel = {
     }));
 
     return subject;
+=======
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ['available', 'upcoming', 'archived'],
+    default: 'available'
+>>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
   }
 };
 
