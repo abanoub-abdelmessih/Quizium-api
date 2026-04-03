@@ -13,34 +13,17 @@ import {
   formatSubjectResponse,
 } from "../utils/content.js";
 
-<<<<<<< HEAD
 const populateSubjectWithTopics = async (subjectId) => {
   return Subject.populateWithTopics(subjectId);
-=======
-const populateSubjectWithTopics = (subjectId) => {
-  return Subject.findById(subjectId)
-    .populate({
-      path: "topics",
-      options: { sort: { createdAt: 1 } },
-    })
-    .populate({
-      path: "createdBy",
-      select: "name email _id",
-    });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
 };
 
 const sanitizeTopicPayload = (topic) => {
-  if (!topic || typeof topic !== "object") {
-    return null;
-  }
+  if (!topic || typeof topic !== "object") return null;
 
   const title = topic.title?.trim();
   const description = sanitizeDescription(topic.description || "");
 
-  if (!title || !description) {
-    return null;
-  }
+  if (!title || !description) return null;
 
   return {
     title,
@@ -67,30 +50,21 @@ export const createSubject = async (req, res) => {
     const cleanedDescription = sanitizeDescription(description || "");
 
     if (!trimmedTitle || !cleanedDescription) {
-      return res
-        .status(400)
-        .json({ message: "Title and description are required" });
+      return res.status(400).json({ message: "Title and description are required" });
     }
 
-    const parsedTopics = parseTopicsInput(topics)
-      .map(sanitizeTopicPayload)
-      .filter(Boolean);
+    const parsedTopics = parseTopicsInput(topics).map(sanitizeTopicPayload).filter(Boolean);
 
     if (parsedTopics.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "At least one valid topic is required" });
+      return res.status(400).json({ message: "At least one valid topic is required" });
     }
 
-    // Validate status - now required
     const validStatuses = ['available', 'upcoming', 'archived'];
-
     if (!status) {
       return res.status(400).json({
         message: "Status is required. Must be one of: available, upcoming, archived"
       });
     }
-
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         message: "Invalid status. Must be one of: available, upcoming, archived"
@@ -100,16 +74,10 @@ export const createSubject = async (req, res) => {
     let imageUrl = null;
     if (req.file) {
       try {
-        const uploadResult = await uploadToCloudinary(
-          req.file,
-          "cloudnaiy/subjects",
-          "auto"
-        );
+        const uploadResult = await uploadToCloudinary(req.file, "cloudnaiy/subjects", "auto");
         imageUrl = uploadResult.secure_url;
       } catch (error) {
-        return res.status(500).json({
-          message: "Failed to upload subject image: " + error.message,
-        });
+        return res.status(500).json({ message: "Failed to upload subject image: " + error.message });
       }
     }
 
@@ -121,10 +89,7 @@ export const createSubject = async (req, res) => {
       status: status,
     });
 
-    const topicsToInsert = parsedTopics.map((topic) => ({
-      ...topic,
-      subject: subject._id,
-    }));
+    const topicsToInsert = parsedTopics.map((topic) => ({ ...topic, subject: subject._id }));
 
     try {
       await Topic.insertMany(topicsToInsert);
@@ -147,8 +112,16 @@ export const createSubject = async (req, res) => {
 // Get all subjects
 export const getSubjects = async (req, res) => {
   try {
-<<<<<<< HEAD
-    const subjects = await Subject.find({}, { sort: { createdAt: -1 } });
+    const isUserAdmin = req.user?.isAdmin || false;
+
+    let subjects = await Subject.find({}, { sort: { createdAt: -1 } });
+
+    // Filter by status in-memory (Firestore doesn't support $in)
+    if (!isUserAdmin) {
+      subjects = subjects.filter(s =>
+        s.status === 'available' || s.status === 'upcoming' || !s.status
+      );
+    }
 
     // Populate topics for each subject
     const populatedSubjects = await Promise.all(
@@ -156,29 +129,6 @@ export const getSubjects = async (req, res) => {
         return Subject.populateWithTopics(subject);
       })
     );
-=======
-    // Build query filter based on user role
-    let filter = {};
-
-    // If user is not authenticated or not an admin, filter out archived subjects
-    const isUserAdmin = req.user?.isAdmin || false;
-
-    if (!isUserAdmin) {
-      filter.status = { $in: ['available', 'upcoming'] };
-    }
-    // If user is admin, no filter is applied (they can see all subjects including archived)
-
-    const subjects = await Subject.find(filter)
-      .sort({ createdAt: -1 })
-      .populate({
-        path: "topics",
-        options: { sort: { createdAt: 1 } },
-      })
-      .populate({
-        path: "createdBy",
-        select: "name email _id",
-      });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
 
     res.json({
       subjects: populatedSubjects.map(formatSubjectResponse),
@@ -197,9 +147,7 @@ export const getSubject = async (req, res) => {
       return res.status(404).json({ message: "Subject not found" });
     }
 
-    res.json({
-      subject: formatSubjectResponse(subject),
-    });
+    res.json({ subject: formatSubjectResponse(subject) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -217,44 +165,29 @@ export const updateSubject = async (req, res) => {
 
     if (title !== undefined) {
       const trimmedTitle = title.trim();
-      if (!trimmedTitle) {
-        return res.status(400).json({ message: "Title cannot be empty" });
-      }
+      if (!trimmedTitle) return res.status(400).json({ message: "Title cannot be empty" });
       subject.title = trimmedTitle;
     }
     if (description !== undefined) {
       const cleanedDescription = sanitizeDescription(description);
-      if (!cleanedDescription) {
-        return res.status(400).json({ message: "Description cannot be empty" });
-      }
+      if (!cleanedDescription) return res.status(400).json({ message: "Description cannot be empty" });
       subject.description = cleanedDescription;
     }
     if (status !== undefined) {
       const validStatuses = ['available', 'upcoming', 'archived'];
       if (!validStatuses.includes(status)) {
-        return res.status(400).json({
-          message: "Invalid status. Must be one of: available, upcoming, archived"
-        });
+        return res.status(400).json({ message: "Invalid status. Must be one of: available, upcoming, archived" });
       }
       subject.status = status;
     }
 
     if (req.file) {
-      if (subject.image) {
-        await deleteImageIfExists(subject.image);
-      }
-
+      if (subject.image) await deleteImageIfExists(subject.image);
       try {
-        const uploadResult = await uploadToCloudinary(
-          req.file,
-          "cloudnaiy/subjects",
-          "auto"
-        );
+        const uploadResult = await uploadToCloudinary(req.file, "cloudnaiy/subjects", "auto");
         subject.image = uploadResult.secure_url;
       } catch (error) {
-        return res.status(500).json({
-          message: "Failed to upload subject image: " + error.message,
-        });
+        return res.status(500).json({ message: "Failed to upload subject image: " + error.message });
       }
     }
 
@@ -274,19 +207,13 @@ export const updateSubject = async (req, res) => {
 export const deleteSubject = async (req, res) => {
   try {
     const subject = await Subject.findById(req.params.id);
+    if (!subject) return res.status(404).json({ message: "Subject not found" });
 
-    if (!subject) {
-      return res.status(404).json({ message: "Subject not found" });
-    }
-
-    // Get topics for this subject to delete their images
     const topics = await Topic.find({ subject: subject._id });
 
-    if (subject.image) {
-      await deleteImageIfExists(subject.image);
-    }
+    if (subject.image) await deleteImageIfExists(subject.image);
 
-    const topicImages = topics.map((topic) => topic.image).filter(Boolean);
+    const topicImages = topics.map((t) => t.image).filter(Boolean);
     await Promise.all(topicImages.map(deleteImageIfExists));
 
     await Topic.deleteMany({ subject: subject._id });
@@ -299,39 +226,29 @@ export const deleteSubject = async (req, res) => {
   }
 };
 
-// Delete all subjects (admin only) - Enhanced version with detailed cleanup
+// Delete all subjects (admin only)
 export const deleteAllSubjects = async (req, res) => {
   try {
-    // Additional safety checks
     const { confirmation, adminPassword } = req.body;
 
     if (!confirmation || confirmation !== "DELETE_ALL_SUBJECTS") {
       return res.status(400).json({
-        message:
-          'Confirmation required. Send { confirmation: "DELETE_ALL_SUBJECTS" } in request body to proceed.',
+        message: 'Confirmation required. Send { confirmation: "DELETE_ALL_SUBJECTS" } in request body.',
       });
     }
 
-    // Optional: Verify admin password for extra security
     if (adminPassword) {
       const User = (await import("../models/User.js")).default;
       const adminUser = await User.findById(req.user._id);
       const isPasswordValid = await adminUser.comparePassword(adminPassword);
-
       if (!isPasswordValid) {
-        return res.status(401).json({
-          message: "Invalid admin password",
-        });
+        return res.status(401).json({ message: "Invalid admin password" });
       }
     }
 
-    // Get all subjects with their topics
-    const allSubjects = await Subject.find().populate("topics");
-
+    const allSubjects = await Subject.find({});
     if (allSubjects.length === 0) {
-      return res.json({
-        message: "No subjects found to delete",
-      });
+      return res.json({ message: "No subjects found to delete" });
     }
 
     let totalDeletedSubjects = 0;
@@ -339,94 +256,59 @@ export const deleteAllSubjects = async (req, res) => {
     let totalDeletedExams = 0;
     const deletedSubjectTitles = [];
 
-    // Delete each subject with its associated data
     for (const subject of allSubjects) {
       try {
-        // Delete subject image from Cloudinary if exists
-        if (subject.image) {
-          await deleteImageIfExists(subject.image);
-        }
+        if (subject.image) await deleteImageIfExists(subject.image);
 
-        // Delete topic images from Cloudinary
-        const topicImages =
-          subject.topics?.map((topic) => topic.image).filter(Boolean) || [];
+        const topics = await Topic.find({ subject: subject._id });
+        const topicImages = topics.map((t) => t.image).filter(Boolean);
         await Promise.all(topicImages.map(deleteImageIfExists));
 
-        // Delete all topics for this subject
-        const topicDeleteResult = await Topic.deleteMany({
-          subject: subject._id,
-        });
-        totalDeletedTopics += topicDeleteResult.deletedCount;
+        const topicResult = await Topic.deleteMany({ subject: subject._id });
+        totalDeletedTopics += topicResult.deletedCount;
 
-        // Delete all exams for this subject
-        const examDeleteResult = await Exam.deleteMany({
-          subject: subject._id,
-        });
-        totalDeletedExams += examDeleteResult.deletedCount;
+        const examResult = await Exam.deleteMany({ subject: subject._id });
+        totalDeletedExams += examResult.deletedCount;
 
-        // Delete the subject
         await Subject.deleteOne({ _id: subject._id });
         totalDeletedSubjects++;
         deletedSubjectTitles.push(subject.title);
-      } catch (subjectError) {
-        console.error(`Error deleting subject ${subject.title}:`, subjectError);
-        // Continue with next subject even if one fails
+      } catch (err) {
+        console.error(`Error deleting subject ${subject.title}:`, err);
       }
     }
 
-    console.warn(
-      `ADMIN ACTION: User ${req.user.username} deleted ${totalDeletedSubjects} subjects, ${totalDeletedTopics} topics, and ${totalDeletedExams} exams`
-    );
-
     res.json({
       message: `Successfully deleted ${totalDeletedSubjects} subjects and all associated data`,
-      summary: {
-        deletedSubjects: totalDeletedSubjects,
-        deletedTopics: totalDeletedTopics,
-        deletedExams: totalDeletedExams,
-      },
+      summary: { deletedSubjects: totalDeletedSubjects, deletedTopics: totalDeletedTopics, deletedExams: totalDeletedExams },
       deletedSubjects: deletedSubjectTitles,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("Error in deleteAllSubjects:", error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// Delete all topics in a subject (admin only) - Enhanced version
+// Delete all topics in a subject (admin only)
 export const deleteAllTopicsInSubject = async (req, res) => {
   try {
     const { id: subjectId } = req.params;
     const { confirmation, keepFirstTopic } = req.body;
 
-    // Check if subject exists
     const subject = await Subject.findById(subjectId);
-    if (!subject) {
-      return res.status(404).json({ message: "Subject not found" });
-    }
+    if (!subject) return res.status(404).json({ message: "Subject not found" });
 
-    // Safety confirmation
     if (!confirmation || confirmation !== "DELETE_ALL_TOPICS") {
       return res.status(400).json({
-        message:
-          'Confirmation required. Send { confirmation: "DELETE_ALL_TOPICS" } in request body to proceed.',
+        message: 'Confirmation required. Send { confirmation: "DELETE_ALL_TOPICS" } in request body.',
       });
     }
 
-    // Get all topics for this subject, sorted by creation date
-    let topics = await Topic.find({ subject: subjectId }).sort({
-      createdAt: 1,
-    });
-
+    let topics = await Topic.find({ subject: subjectId }, { sort: { createdAt: 1 } });
     if (topics.length === 0) {
-      return res.json({
-        message: "No topics found to delete in this subject",
-        subject: subject.title,
-      });
+      return res.json({ message: "No topics found to delete in this subject", subject: subject.title });
     }
 
-    // Option to keep the first topic (oldest) if needed
     let topicsToDelete = topics;
     let keptTopic = null;
 
@@ -439,52 +321,30 @@ export const deleteAllTopicsInSubject = async (req, res) => {
     let deletedImages = 0;
     const deletedTopicTitles = [];
 
-    // Delete topic images from Cloudinary and the topics themselves
     for (const topic of topicsToDelete) {
       try {
-        // Delete topic image from Cloudinary if exists
         if (topic.image) {
           await deleteImageIfExists(topic.image);
           deletedImages++;
         }
-
-        // Delete the topic
         await Topic.deleteOne({ _id: topic._id });
         deletedCount++;
         deletedTopicTitles.push(topic.title);
-      } catch (topicError) {
-        console.error(`Error deleting topic ${topic.title}:`, topicError);
-        // Continue with next topic even if one fails
+      } catch (err) {
+        console.error(`Error deleting topic ${topic.title}:`, err);
       }
     }
 
     const response = {
       message: `Successfully deleted ${deletedCount} topics from subject: ${subject.title}`,
-      summary: {
-        subject: subject.title,
-        totalTopicsBefore: topics.length,
-        deletedTopics: deletedCount,
-        remainingTopics: topics.length - deletedCount,
-        deletedImages: deletedImages,
-      },
+      summary: { subject: subject.title, totalTopicsBefore: topics.length, deletedTopics: deletedCount, remainingTopics: topics.length - deletedCount, deletedImages },
       timestamp: new Date().toISOString(),
     };
-
-    if (keptTopic) {
-      response.keptTopic = {
-        id: keptTopic._id,
-        title: keptTopic.title,
-        reason: "Oldest topic kept as requested",
-      };
-    }
-
-    if (deletedTopicTitles.length > 0) {
-      response.deletedTopics = deletedTopicTitles;
-    }
+    if (keptTopic) response.keptTopic = { id: keptTopic._id, title: keptTopic.title };
+    if (deletedTopicTitles.length > 0) response.deletedTopics = deletedTopicTitles;
 
     res.json(response);
   } catch (error) {
-    console.error("Error in deleteAllTopicsInSubject:", error);
     res.status(500).json({ message: error.message });
   }
 };

@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { generateOTP, sendOTPEmail } from "../utils/email.js";
-
 import { verifyAdminEmail, verifyAdminPassword } from "../utils/adminAuth.js";
 
 // Generate JWT token
@@ -18,46 +17,24 @@ export const register = async (req, res) => {
 
     if (!name || !username || !email || !password) {
       return res.status(400).json({
-        message:
-          "Please provide all required fields: name, username, email, password",
+        message: "Please provide all required fields: name, username, email, password",
       });
     }
 
     if (password.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
-<<<<<<< HEAD
     // Check for existing user by email
     const existingByEmail = await User.findOne({ email: email.toLowerCase() });
     if (existingByEmail) {
-      return res.status(400).json({ message: 'User with this email already exists' });
+      return res.status(400).json({ message: "User with this email already exists" });
     }
 
     // Check for existing user by username
     const existingByUsername = await User.findOne({ username: username.toLowerCase() });
     if (existingByUsername) {
-      return res.status(400).json({ message: 'Username already taken' });
-=======
-    const existingUser = await User.findOne({
-      $or: [
-        { email: email.toLowerCase() },
-        { username: username.toLowerCase() },
-      ],
-    });
-
-    if (existingUser) {
-      if (existingUser.email === email.toLowerCase()) {
-        return res
-          .status(400)
-          .json({ message: "User with this email already exists" });
-      }
-      if (existingUser.username === username.toLowerCase()) {
-        return res.status(400).json({ message: "Username already taken" });
-      }
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
+      return res.status(400).json({ message: "Username already taken" });
     }
 
     const user = await User.create({
@@ -80,17 +57,6 @@ export const register = async (req, res) => {
       },
     });
   } catch (error) {
-<<<<<<< HEAD
-=======
-    if (error.code === 11000) {
-      // Duplicate key error
-      const field = Object.keys(error.keyPattern)[0];
-      return res.status(400).json({
-        message: `${field === "username" ? "Username" : "Email"
-          } already exists`,
-      });
-    }
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
     res.status(500).json({ message: error.message });
   }
 };
@@ -101,9 +67,7 @@ export const login = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Please provide email and password" });
+      return res.status(400).json({ message: "Please provide email and password" });
     }
 
     // Check if admin login
@@ -111,18 +75,15 @@ export const login = async (req, res) => {
       let admin = await User.findOne({ email: email.toLowerCase() });
 
       if (!admin) {
-        // Create admin account if doesn't exist
-        // Use a generic name or derive from email since we don't have the mapping anymore
         const adminName = "Admin";
         admin = await User.create({
           name: adminName,
           email: email.toLowerCase(),
-          password: process.env.ADMIN_PASSWORD, // Use the env password for the DB record too
+          password: process.env.ADMIN_PASSWORD,
           isAdmin: true,
-          username: email.toLowerCase().split("@")[0], // Generate username from email
+          username: email.toLowerCase().split("@")[0],
         });
       } else {
-        // Ensure admin status is true
         if (!admin.isAdmin) {
           admin.isAdmin = true;
           await admin.save();
@@ -188,11 +149,7 @@ export const forgotPassword = async (req, res) => {
     const otp = generateOTP();
     user.otp = {
       code: otp,
-<<<<<<< HEAD
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() // 10 minutes
-=======
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     };
     await user.save();
 
@@ -222,27 +179,17 @@ export const resetPassword = async (req, res) => {
     }
 
     if (!user.otp || !user.otp.code) {
-      return res
-        .status(400)
-        .json({ message: "No OTP found. Please request a new one" });
+      return res.status(400).json({ message: "No OTP found. Please request a new one" });
     }
 
     if (user.otp.code !== otp) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-<<<<<<< HEAD
     if (new Date() > new Date(user.otp.expiresAt)) {
-      return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
-=======
-    if (new Date() > user.otp.expiresAt) {
-      return res
-        .status(400)
-        .json({ message: "OTP has expired. Please request a new one" });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
+      return res.status(400).json({ message: "OTP has expired. Please request a new one" });
     }
 
-    // OTP is valid - return success (don't change password here)
     res.json({ message: "OTP verified successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -255,15 +202,11 @@ export const setNewPassword = async (req, res) => {
     const { email, newPassword } = req.body;
 
     if (!email || !newPassword) {
-      return res
-        .status(400)
-        .json({ message: "Please provide email and new password" });
+      return res.status(400).json({ message: "Please provide email and new password" });
     }
 
     if (newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
     const user = await User.findOne({ email: email.toLowerCase() });
@@ -272,24 +215,13 @@ export const setNewPassword = async (req, res) => {
     }
 
     if (!user.otp || !user.otp.code) {
-      return res
-        .status(400)
-        .json({ message: "OTP not verified. Please verify OTP first" });
+      return res.status(400).json({ message: "OTP not verified. Please verify OTP first" });
     }
 
-    // Check if OTP is still valid
-<<<<<<< HEAD
     if (new Date() > new Date(user.otp.expiresAt)) {
-      return res.status(400).json({ message: 'OTP has expired. Please request a new one' });
-=======
-    if (new Date() > user.otp.expiresAt) {
-      return res
-        .status(400)
-        .json({ message: "OTP has expired. Please request a new one" });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
+      return res.status(400).json({ message: "OTP has expired. Please request a new one" });
     }
 
-    // Update password and clear OTP
     user.password = newPassword;
     user.otp = null;
     await user.save();

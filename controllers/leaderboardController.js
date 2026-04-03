@@ -8,26 +8,29 @@ export const getLeaderboard = async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const filter = req.query.filter || 'all'; // 'all', 'week', 'month'
 
-<<<<<<< HEAD
-    // Get all scores (sorted by score descending)
-    const topScores = await Score.find({}, { sort: { score: -1 }, limit });
+    let allScores = await Score.find({}, { sort: { score: -1 } });
+
+    // Filter by time period in-memory (Firestore doesn't support $gte on dates easily)
+    if (filter === 'week' || filter === 'month') {
+      const now = new Date();
+      const cutoff = filter === 'week'
+        ? new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+      allScores = allScores.filter(score => {
+        const completedAt = new Date(score.completedAt);
+        return completedAt >= cutoff;
+      });
+    }
 
     // Populate user and exam details for each score
-    for (const score of topScores) {
-      // Populate user
+    for (const score of allScores) {
       if (score.user && typeof score.user === 'string') {
         const user = await User.findById(score.user, 'name email profileImage');
         if (user) {
-          score.user = {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            profileImage: user.profileImage
-          };
+          score.user = { _id: user._id, name: user.name, email: user.email, profileImage: user.profileImage };
         }
       }
-
-      // Populate exam
       if (score.exam && typeof score.exam === 'string') {
         const exam = await Exam.findById(score.exam);
         if (exam) {
@@ -35,35 +38,12 @@ export const getLeaderboard = async (req, res) => {
         }
       }
     }
-=======
-    // Build date filter based on time period
-    let dateFilter = {};
-    const now = new Date();
-
-    if (filter === 'week') {
-      // Last 7 days
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      dateFilter.completedAt = { $gte: weekAgo };
-    } else if (filter === 'month') {
-      // Last 30 days
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      dateFilter.completedAt = { $gte: monthAgo };
-    }
-    // If filter is 'all', no date filter is applied
-
-    // Get top scores with user and exam details, applying date filter
-    const topScores = await Score.find(dateFilter)
-      .populate('user', 'name email profileImage')
-      .populate('exam', 'title subject')
-      .populate('exam.subject', 'title')
-      .sort({ score: -1, completedAt: -1 });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
 
     // Group by user to get their best scores
     const userBestScores = {};
 
-    topScores.forEach(score => {
-      if (!score.user || typeof score.user === 'string') return; // skip if user not found
+    allScores.forEach(score => {
+      if (!score.user || typeof score.user === 'string') return;
       const userId = score.user._id.toString();
       if (!userBestScores[userId] || score.score > userBestScores[userId].score) {
         userBestScores[userId] = {
@@ -82,10 +62,9 @@ export const getLeaderboard = async (req, res) => {
       }
     });
 
-    // Convert to array and sort
     const leaderboard = Object.values(userBestScores)
       .sort((a, b) => b.score - a.score)
-      .slice(0, limit) // Apply limit
+      .slice(0, limit)
       .map((entry, index) => ({
         rank: index + 1,
         ...entry

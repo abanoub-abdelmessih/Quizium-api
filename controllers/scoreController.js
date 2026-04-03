@@ -2,7 +2,6 @@ import Score from "../models/Score.js";
 import Exam from "../models/Exam.js";
 import Question from "../models/Question.js";
 
-// Submit exam answers
 // Submit exam answers with retake validation
 export const submitExam = async (req, res) => {
   try {
@@ -18,20 +17,19 @@ export const submitExam = async (req, res) => {
       return res.status(404).json({ message: "Exam not found" });
     }
 
-    // Check if user has already taken this exam
-    const existingScores = await Score.find({
-      user: req.user._id,
-      exam: examId,
-    }).sort({ completedAt: -1 });
+    // Check retake eligibility
+    const existingScores = await Score.find(
+      { user: req.user._id, exam: examId },
+      { sort: { completedAt: -1 } }
+    );
 
     const latestScore = existingScores[0];
     const attemptCount = existingScores.length;
 
-    // Validation rules
     if (attemptCount >= 2) {
       return res.status(400).json({
         message: "You have already used both attempts for this exam",
-        previousAttempts: existingScores.map((score) => ({
+        previousAttempts: existingScores.map(score => ({
           score: score.score,
           percentage: score.percentage,
           completedAt: score.completedAt,
@@ -50,7 +48,6 @@ export const submitExam = async (req, res) => {
       });
     }
 
-    // Get all questions for this exam
     const questions = await Question.find({ exam: examId });
     if (questions.length === 0) {
       return res.status(400).json({ message: "Exam has no questions" });
@@ -59,19 +56,12 @@ export const submitExam = async (req, res) => {
     let score = 0;
     const answerDetails = [];
 
-    // Check each answer
     for (const question of questions) {
-      const userAnswer = answers.find(
-        (a) => a.questionId === question._id.toString()
-      );
-      const selectedAnswer = userAnswer
-        ? parseInt(userAnswer.selectedAnswer)
-        : null;
+      const userAnswer = answers.find(a => a.questionId === question._id.toString());
+      const selectedAnswer = userAnswer ? parseInt(userAnswer.selectedAnswer) : null;
       const isCorrect = selectedAnswer === question.correctAnswer;
 
-      if (isCorrect) {
-        score += question.marks;
-      }
+      if (isCorrect) score += question.marks;
 
       answerDetails.push({
         question: question._id,
@@ -82,8 +72,7 @@ export const submitExam = async (req, res) => {
 
     const percentage = (score / exam.totalMarks) * 100;
 
-    // Save score
-    const scoreRecord = await Score.create({
+    await Score.create({
       user: req.user._id,
       exam: examId,
       score,
@@ -93,7 +82,6 @@ export const submitExam = async (req, res) => {
       attemptNumber: attemptCount + 1,
     });
 
-    // Calculate answer statistics
     const correctAnswers = answerDetails.filter(a => a.isCorrect).length;
     const incorrectAnswers = answerDetails.filter(a => !a.isCorrect).length;
     const totalQuestions = questions.length;
@@ -112,9 +100,8 @@ export const submitExam = async (req, res) => {
       },
     };
 
-    // Add comparison data if this is a retake
     if (attemptCount === 1) {
-      const previousScore = existingScores[0]; // Get the first attempt (latestScore)
+      const previousScore = existingScores[0];
       const scoreImprovement = score - previousScore.score;
       const percentageImprovement = percentage - previousScore.percentage;
 
@@ -127,12 +114,7 @@ export const submitExam = async (req, res) => {
         improvement: {
           score: scoreImprovement,
           percentage: percentageImprovement,
-          status:
-            scoreImprovement > 0
-              ? "improved"
-              : scoreImprovement < 0
-                ? "declined"
-                : "same",
+          status: scoreImprovement > 0 ? "improved" : scoreImprovement < 0 ? "declined" : "same",
         },
       };
     }
@@ -147,29 +129,13 @@ export const submitExam = async (req, res) => {
 export const getExamResults = async (req, res) => {
   try {
     const { examId } = req.params;
-<<<<<<< HEAD
     const scoreDoc = await Score.findOne(
       { user: req.user._id, exam: examId },
       { sort: { completedAt: -1 } }
     );
 
     if (!scoreDoc) {
-      return res.status(404).json({ message: 'No results found for this exam' });
-=======
-    const score = await Score.findOne({
-      user: req.user._id,
-      exam: examId,
-    })
-      .populate("exam", "title subject")
-      .populate("exam.subject", "title")
-      .select("-answers")
-      .sort({ completedAt: -1 });
-
-    if (!score) {
-      return res
-        .status(404)
-        .json({ message: "No results found for this exam" });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
+      return res.status(404).json({ message: "No results found for this exam" });
     }
 
     // Populate exam
@@ -191,7 +157,7 @@ export const getExamResults = async (req, res) => {
               questionText: question.questionText,
               options: question.options,
               correctAnswer: question.correctAnswer,
-              marks: question.marks
+              marks: question.marks,
             };
           }
         }
@@ -207,7 +173,6 @@ export const getExamResults = async (req, res) => {
 // Get all user's scores
 export const getUserScores = async (req, res) => {
   try {
-<<<<<<< HEAD
     const scores = await Score.find(
       { user: req.user._id },
       { sort: { completedAt: -1 } }
@@ -222,62 +187,73 @@ export const getUserScores = async (req, res) => {
         }
       }
     }
-=======
-    const scores = await Score.find({ user: req.user._id })
-      .populate("exam", "title subject")
-      .populate("exam.subject", "title")
-      .select("-answers")
-      .sort({ completedAt: -1 });
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
 
     res.json({ scores });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-<<<<<<< HEAD
-=======
 
-// Get detailed exam answers (only for users who took the exam)
+// Get detailed exam answers
 export const getExamAnswers = async (req, res) => {
   try {
     const { examId } = req.params;
 
-    // Check if user has taken this exam
-    const score = await Score.findOne({
-      user: req.user._id,
-      exam: examId,
-    })
-      .populate("exam", "title subject")
-      .populate("exam.subject", "title")
-      .populate("answers.question", "questionText options correctAnswer marks")
-      .sort({ completedAt: -1 });
+    const scoreDoc = await Score.findOne(
+      { user: req.user._id, exam: examId },
+      { sort: { completedAt: -1 } }
+    );
 
-    if (!score) {
+    if (!scoreDoc) {
       return res.status(404).json({
         message: "You have not taken this exam yet or no results found",
       });
     }
 
-    // Return the full result with answers
+    // Populate exam
+    if (scoreDoc.exam && typeof scoreDoc.exam === 'string') {
+      const exam = await Exam.findById(scoreDoc.exam);
+      if (exam) {
+        scoreDoc.exam = { _id: exam._id, title: exam.title, subject: exam.subject };
+      }
+    }
+
+    // Populate answers with question details
+    if (scoreDoc.answers && Array.isArray(scoreDoc.answers)) {
+      for (const answer of scoreDoc.answers) {
+        if (answer.question && typeof answer.question === 'string') {
+          const question = await Question.findById(answer.question);
+          if (question) {
+            answer.question = {
+              _id: question._id,
+              questionText: question.questionText,
+              options: question.options,
+              correctAnswer: question.correctAnswer,
+              marks: question.marks,
+            };
+          }
+        }
+      }
+    }
+
     res.json({
       message: "Exam answers retrieved successfully",
-      result: score,
+      result: scoreDoc,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
-// Check if user can take an exam
+// Check exam eligibility
 export const checkExamEligibility = async (req, res) => {
   try {
     const { examId } = req.params;
 
-    const existingScores = await Score.find({
-      user: req.user._id,
-      exam: examId,
-    }).sort({ completedAt: -1 });
+    const existingScores = await Score.find(
+      { user: req.user._id, exam: examId },
+      { sort: { completedAt: -1 } }
+    );
 
     const latestScore = existingScores[0];
     const attemptCount = existingScores.length;
@@ -306,7 +282,7 @@ export const checkExamEligibility = async (req, res) => {
         remainingAttempts,
         maxAttempts: 2,
       },
-      previousScores: existingScores.map((score) => ({
+      previousScores: existingScores.map(score => ({
         score: score.score,
         percentage: score.percentage,
         attemptNumber: score.attemptNumber,
@@ -317,4 +293,3 @@ export const checkExamEligibility = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632

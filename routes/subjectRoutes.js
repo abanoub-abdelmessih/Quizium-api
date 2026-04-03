@@ -30,7 +30,7 @@ const optionalAuth = async (req, res, next) => {
       const User = (await import('../models/User.js')).default;
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId).select('-password');
+      const user = await User.findById(decoded.userId, '-password');
 
       if (user) {
         req.user = user;
@@ -54,8 +54,8 @@ router.use(isAdmin);
 
 router.post("/", uploadSubjectImage, createSubject);
 router.patch("/:id", uploadSubjectImage, updateSubject);
-router.delete("/:id", deleteSubject);
 router.delete("/admin/delete-all", deleteAllSubjects);
+router.delete("/:id", deleteSubject);
 
 router.post("/:id/topics", uploadTopicImage, createTopic);
 router.patch("/:id/topics/:topicId", uploadTopicImage, updateTopic);

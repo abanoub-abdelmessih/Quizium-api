@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import { getDB } from '../config/database.js';
 
 const COLLECTION = 'scores';
@@ -15,6 +14,7 @@ const ScoreModel = {
       totalMarks: data.totalMarks,
       percentage: data.percentage,
       answers: data.answers || [],
+      attemptNumber: data.attemptNumber || 1,
       completedAt: data.completedAt || now,
       createdAt: now,
       updatedAt: now
@@ -77,6 +77,18 @@ const ScoreModel = {
     );
   },
 
+  async countDocuments(query = {}) {
+    const db = getDB();
+    let ref = db.collection(COLLECTION);
+
+    for (const [key, value] of Object.entries(query)) {
+      ref = ref.where(key, '==', value);
+    }
+
+    const snapshot = await ref.get();
+    return snapshot.size;
+  },
+
   async deleteMany(query) {
     const db = getDB();
     let ref = db.collection(COLLECTION);
@@ -126,60 +138,3 @@ function attachMethods(data) {
 }
 
 export default ScoreModel;
-=======
-import mongoose from "mongoose";
-
-const scoreSchema = new mongoose.Schema(
-  {
-    user: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    exam: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Exam",
-      required: true,
-    },
-    score: {
-      type: Number,
-      required: true,
-    },
-    totalMarks: {
-      type: Number,
-      required: true,
-    },
-    percentage: {
-      type: Number,
-      required: true,
-    },
-    answers: [
-      {
-        question: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Question",
-        },
-        selectedAnswer: Number,
-        isCorrect: Boolean,
-      },
-    ],
-    attemptNumber: {
-      type: Number,
-      default: 1,
-    },
-    completedAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  {
-    timestamps: true,
-  }
-);
-
-// Compound index for better query performance
-scoreSchema.index({ user: 1, exam: 1, attemptNumber: -1 });
-scoreSchema.index({ score: -1, completedAt: -1 });
-
-export default mongoose.model("Score", scoreSchema);
->>>>>>> 299e46e31cc25dddd2b67a1e7b3f7e3812bdc632
