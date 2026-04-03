@@ -53,29 +53,45 @@ export const parseTopicsInput = (topicsInput) => {
 };
 
 export const formatTopicResponse = (topicDoc) => ({
-  id: topicDoc._id.toString(),
-  title: topicDoc.title,
-  description: topicDoc.description,
+  id: topicDoc.id || (topicDoc._id ? topicDoc._id.toString() : ""),
+  title: topicDoc.title || "",
+  description: topicDoc.description || "",
   image: topicDoc.image || null,
   tags: topicDoc.tags || [],
-  createdAt: topicDoc.createdAt,
-  updatedAt: topicDoc.updatedAt,
+  createdAt: topicDoc.createdAt || null,
+  updatedAt: topicDoc.updatedAt || null,
 });
 
-export const formatSubjectResponse = (subjectDoc) => ({
-  id: subjectDoc._id.toString(),
-  title: subjectDoc.title,
-  description: subjectDoc.description,
-  image: subjectDoc.image || null,
-  status: subjectDoc.status || 'available',
-  topics: (subjectDoc.topics || []).map(formatTopicResponse),
-  createdBy: subjectDoc.createdBy
-    ? {
-      _id: subjectDoc.createdBy._id.toString(),
-      name: subjectDoc.createdBy.name,
-      email: subjectDoc.createdBy.email,
+export const formatSubjectResponse = (subjectDoc) => {
+  let createdByFormatted = null;
+  
+  if (subjectDoc.createdBy) {
+    if (typeof subjectDoc.createdBy === 'object' && subjectDoc.createdBy._id) {
+       // Populated object
+       createdByFormatted = {
+         _id: subjectDoc.createdBy._id.toString(),
+         name: subjectDoc.createdBy.name || "Unknown",
+         email: subjectDoc.createdBy.email || "unknown@example.com",
+       };
+    } else {
+       // Unpopulated string ID
+       createdByFormatted = {
+         _id: subjectDoc.createdBy.toString(),
+         name: "Unknown",
+         email: "",
+       };
     }
-    : null,
-  createdAt: subjectDoc.createdAt,
-  updatedAt: subjectDoc.updatedAt,
-});
+  }
+
+  return {
+    id: subjectDoc.id || (subjectDoc._id ? subjectDoc._id.toString() : ""),
+    title: subjectDoc.title || "",
+    description: subjectDoc.description || "",
+    image: subjectDoc.image || null,
+    status: subjectDoc.status || 'available',
+    topics: (subjectDoc.topics || []).map(formatTopicResponse),
+    createdBy: createdByFormatted,
+    createdAt: subjectDoc.createdAt || null,
+    updatedAt: subjectDoc.updatedAt || null,
+  };
+};

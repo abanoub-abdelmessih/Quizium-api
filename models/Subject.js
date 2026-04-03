@@ -37,11 +37,13 @@ const SubjectModel = {
       ref = ref.where(key, '==', value);
     }
 
-    const snapshot = await ref.limit(1).get();
+    const snapshot = await ref.get();
     if (snapshot.empty) return null;
 
-    const doc = snapshot.docs[0];
-    return attachMethods({ _id: doc.id, id: doc.id, ...doc.data() });
+    let docs = snapshot.docs.map(doc => ({ _id: doc.id, id: doc.id, ...doc.data() }));
+
+    const doc = docs[0];
+    return attachMethods(doc);
   },
 
   async find(query = {}, options = {}) {
@@ -52,16 +54,31 @@ const SubjectModel = {
       ref = ref.where(key, '==', value);
     }
 
+    const snapshot = await ref.get();
+    let docs = snapshot.docs.map(doc => ({ _id: doc.id, id: doc.id, ...doc.data() }));
+
     if (options.sort) {
       for (const [key, order] of Object.entries(options.sort)) {
-        ref = ref.orderBy(key, order === -1 ? 'desc' : 'asc');
+        // Simple in-memory sort
+        docs.sort((a, b) => {
+          let valA = a[key];
+          let valB = b[key];
+          // Handle dates
+          if (typeof valA === 'string' && !isNaN(Date.parse(valA))) valA = new Date(valA).getTime();
+          if (typeof valB === 'string' && !isNaN(Date.parse(valB))) valB = new Date(valB).getTime();
+          
+          if (valA < valB) return order === -1 ? 1 : -1;
+          if (valA > valB) return order === -1 ? -1 : 1;
+          return 0;
+        });
       }
     }
 
-    const snapshot = await ref.get();
-    return snapshot.docs.map(doc =>
-      attachMethods({ _id: doc.id, id: doc.id, ...doc.data() })
-    );
+    if (options.limit) {
+      docs = docs.slice(0, options.limit);
+    }
+
+    return docs.map(doc => attachMethods(doc));
   },
 
   async findByIdAndDelete(id) {
@@ -112,12 +129,16 @@ const SubjectModel = {
 
     const topicsSnapshot = await db.collection('topics')
       .where('subject', '==', subject._id)
-      .orderBy('createdAt', 'asc')
       .get();
 
-    subject.topics = topicsSnapshot.docs.map(doc => ({
+    const topicsData = topicsSnapshot.docs.map(doc => ({
       _id: doc.id, id: doc.id, ...doc.data()
     }));
+
+    // Sort in memory to avoid needing a Firestore composite index
+    subject.topics = topicsData.sort((a, b) => 
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
 
     return subject;
   }
